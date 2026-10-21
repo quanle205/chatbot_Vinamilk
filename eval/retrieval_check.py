@@ -1,6 +1,6 @@
 """Kiểm tra nhanh truy xuất: mỗi câu hỏi có (doc, mã số) chỉ tiêu cần xuất hiện trong top-k.
 Hit@k = tỉ lệ câu hỏi có đoạn đúng trong k kết quả đầu; MRR = trung bình 1/hạng của đoạn đúng đầu tiên.
-Chạy: python eval/retrieval_check.py [--retriever data/processed/retriever.pkl] [--show]
+Chạy: python eval/retrieval_check.py [--show]
 """
 import argparse
 import sys
@@ -45,11 +45,11 @@ PARAPHRASE = [
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--retriever", default="data/processed/retriever.pkl")
+    ap.add_argument("--chunks", default="data/processed/chunks.jsonl")
     ap.add_argument("--k", type=int, default=6)
     ap.add_argument("--show", action="store_true")
     a = ap.parse_args()
-    r = HybridRetriever.load(a.retriever)
+    r = HybridRetriever.from_jsonl(a.chunks)
     for name, cases in (("TỪ KHÓA", CASES), ("ĐỒNG NGHĨA", PARAPHRASE)):
         print(f"--- {name} ({len(cases)} câu) ---")
         run_group(r, cases, a)

@@ -2,4 +2,3 @@
 pandas
 pillow
 pytesseract
-fastembed

@@ -96,22 +96,18 @@ def main():
         for code in codes[st]:
             ks = [K(dt, st, code, ct), K(dp, st, code, cp), K(dq, st, code, cq)]
             if all(k in V for k in ks) and len({LAB[k] for k in ks}) == 1: cons.append(("ADD", [(ks[0], 1), (ks[1], -1), (ks[2], -1)]))
-    docs = set(df.doc)
-    for st in ("CDKT",):
-        for d in ("q1-2025", "q2-2025", "q3-2025", "q4-2025"):
-            if d != "q4-2025": twin(d, 2, "q4-2025", 2, st) if False else None
-        for d1, d2 in (("q1-2025", "q2-2025"), ("q2-2025", "q3-2025"), ("q3-2025", "q4-2025")):
-            twin(d1, 2, d2, 2, st)
-        twin("q4-2025", 1, "q1-2026", 2, st); twin("q1-2026", 2, "q2-2026", 2, st)
+    # Số đầu năm / số cùng kỳ năm trước của báo cáo này phải bằng số cuối kỳ của báo cáo kia (TWIN).
+    for d1, d2 in (("q1-2025", "q2-2025"), ("q2-2025", "q3-2025"), ("q3-2025", "q4-2025")):
+        twin(d1, 2, d2, 2, "CDKT")
+    twin("q4-2025", 1, "q1-2026", 2, "CDKT"); twin("q1-2026", 2, "q2-2026", 2, "CDKT")
     for st in ("KQKD", "LCTT"):
         twin("q1-2025", 1, "q1-2026", 2, st)
-        twin("q2-2025", 1, "q2-2026", 2, st) if st == "LCTT" else None
     twin("q2-2025", 1, "q2-2026", 2, "KQKD"); twin("q2-2025", 3, "q2-2026", 4, "KQKD")
     twin("q2-2025", 1, "q2-2026", 2, "LCTT")
+    # Lũy kế quý này = lũy kế quý trước + số riêng quý này (ADD), chỉ KQKD có số riêng quý.
     add("q2-2025", 3, "q1-2025", 1, "q2-2025", 1, "KQKD"); add("q2-2025", 4, "q1-2025", 2, "q2-2025", 2, "KQKD")
     add("q3-2025", 3, "q2-2025", 3, "q3-2025", 1, "KQKD"); add("q3-2025", 4, "q2-2025", 4, "q3-2025", 2, "KQKD")
-    add("q2-2026", 3, "q1-2026", 1, "q2-2026", 1, "KQKD"); add("q2-2026", 4, "q2-2025", 3, "q2-2025", 3, "KQKD") if False else None
-    # (q1-2025 c1) = (q1 YTD) ; q2 c3 chính là lũy kế => dùng ADD ở trên
+    add("q2-2026", 3, "q1-2026", 1, "q2-2026", 1, "KQKD")
     by_key = {}
     for i, (_, t) in enumerate(cons):
         for k, _ in t: by_key.setdefault(k, []).append(i)
@@ -121,7 +117,6 @@ def main():
         t = cons[i][1]
         if unknowns(t): return None
         return sum(s * V[k] for k, s in t)
-    def nfail(idx): return sum(1 for i in idx if (r := resid(i)) not in (None, 0))
 
     # Giá trị cùng chỉ tiêu ở các quý khác (cùng chuẩn mực) để loại kết quả sửa vô lý,
     # vd FILL 'Phải trả người bán' = -81.000 tỷ khi các quý khác ~ +4.000 tỷ.
@@ -139,7 +134,7 @@ def main():
     log = []
     for it in range(400):
         cands = {}
-        def viol(idx): return {i for i in idx if (r := resid(i)) not in (None, 0)}
+        def viol(idx): return {i for i in idx if resid(i) not in (None, 0)}
         for i, (typ, t) in enumerate(cons):
             u = unknowns(t)
             if len(u) == 1 and u[0] not in locked:

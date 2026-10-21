@@ -441,11 +441,6 @@ def normalize_items(items: list, n_cols: int) -> list:
     return items
 
 
-def merge_surplus(items: list, n_cols: int) -> list:
-    # Giữ tên hàm để tương thích; logic mới an toàn hơn.
-    return normalize_items(items, n_cols)
-
-
 # ------------------------------------------------------------------ phân đoạn báo cáo
 def find_section_pages(parsed: list[Row], version: str):
     """Tìm trang bắt đầu KQKD/LCTT bằng cả mã và nhãn, thay vì mã đơn lẻ.
@@ -589,7 +584,7 @@ def residual(eq, vals: dict, c: int):
 
 def failing(eqs, vals, ncols):
     return [(i, c) for i, eq in enumerate(eqs) for c in range(ncols)
-            if (r := residual(eq, vals, c)) not in (None, 0)]
+            if residual(eq, vals, c) not in (None, 0)]
 
 
 def repair_identity(eqs, vals: dict, ncols: int):
@@ -697,7 +692,7 @@ def build(df: pd.DataFrame):
                     if r.code:
                         r.note = (r.note + '; ' if r.note else '') + f'COLUMN_COUNT_UNCERTAIN:{n_cols}({col_conf:.0%})'
             for r in rs:
-                r.items = merge_surplus(r.items, n_cols)
+                r.items = normalize_items(r.items, n_cols)
                 # Số >16 chữ số gần như chắc chắn là ghép nhầm cột/OCR, không cho
                 # đi thẳng vào dataset cuối. Giữ raw để soát tay.
                 if any(v is not None and v.value is not None and len(str(abs(v.value))) > 16 for v in r.items):

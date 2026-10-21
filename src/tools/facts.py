@@ -59,10 +59,6 @@ class Value:
     notes: list = field(default_factory=list)
     description: str = ""                           # vd "quý 1/2026", "tại ngày 31/3/2026"
 
-    @property
-    def derived(self) -> bool:
-        return any("suy ra" in n for n in self.notes)
-
 
 def version_of(doc: str) -> str:
     return "TT99" if int(doc.split("-")[1]) >= 2026 else "TT200"
@@ -170,14 +166,3 @@ class Facts:
                           "(báo cáo không in số riêng quý này)"])
         v.description = f"quý {p.quarter}/{ref.year}"
         return v
-
-    # ---------------------------------------------------------------- chuỗi
-    def available(self, m: Metric) -> list[Period]:
-        out = []
-        for p in self.periods():
-            try:
-                (self.balance if m.kind == "balance" else self.flow)(m, p)
-                out.append(p)
-            except DataUnavailable:
-                pass
-        return out

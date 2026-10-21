@@ -1,7 +1,7 @@
 """Giao diện chatbot BCTC hợp nhất Vinamilk. Chạy: streamlit run app/streamlit_app.py
 
-Cấu hình qua biến môi trường (xem src/agent/agent.py): ANTHROPIC_VERTEX_PROJECT_ID, CLOUD_ML_REGION, VINAMILK_MODEL.
-Giới hạn chi phí cho bản public: SESSION_LIMIT (lượt hỏi/phiên, mặc định 15) và DAILY_LIMIT (lượt/ngày toàn dịch vụ, mặc định 300).
+Cấu hình qua biến môi trường hoặc Streamlit Secrets: GEMINI_API_KEY, GEMINI_MODEL (xem src/agent/agent.py).
+Giới hạn lượt hỏi cho bản public: SESSION_LIMIT (lượt/phiên, mặc định 15) và DAILY_LIMIT (lượt/ngày toàn dịch vụ, mặc định 300).
 """
 import datetime
 import os
@@ -27,25 +27,14 @@ st.set_page_config(page_title="Chatbot BCTC Vinamilk", page_icon="📊", layout=
 
 
 def load_secrets_into_env():
-    """Streamlit Community Cloud: đọc cấu hình Google từ st.secrets (không có ADC như trên Cloud Run).
-
-    Cần: ANTHROPIC_VERTEX_PROJECT_ID (+ CLOUD_ML_REGION tùy chọn) và bảng [gcp_service_account] chứa JSON khóa
-    của tài khoản dịch vụ có vai trò Vertex AI User. Trên Cloud Run/máy local, không có secrets thì bỏ qua.
-    """
+    """Streamlit Community Cloud: đưa cấu hình trong Settings -> Secrets vào biến môi trường (nếu có)."""
     try:
         secrets = dict(st.secrets)
-    except Exception:                                                        # noqa: BLE001 - không có file secrets
+    except Exception:                                                        # noqa: BLE001 - chạy local, không có file secrets
         return
-    for k in ("ANTHROPIC_VERTEX_PROJECT_ID", "CLOUD_ML_REGION", "VINAMILK_MODEL", "SESSION_LIMIT", "DAILY_LIMIT"):
+    for k in ("GEMINI_API_KEY", "GEMINI_MODEL", "SESSION_LIMIT", "DAILY_LIMIT"):
         if k in secrets and k not in os.environ:
             os.environ[k] = str(secrets[k])
-    if "gcp_service_account" in secrets and "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ:
-        import json
-        import tempfile
-        path = Path(tempfile.gettempdir()) / "gcp_sa.json"
-        path.write_text(json.dumps(dict(secrets["gcp_service_account"])), encoding="utf-8")
-        os.chmod(path, 0o600)
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(path)
 
 
 load_secrets_into_env()
@@ -73,6 +62,18 @@ def take_daily_slot() -> bool:
 @st.cache_resource
 def get_agent() -> VinamilkAgent:
     return VinamilkAgent()
+
+
+def friendly_error(e: Exception) -> str:
+    """Thông báo dễ hiểu cho lỗi gọi Gemini; không đưa chi tiết kỹ thuật hay khóa ra giao diện."""
+    code = getattr(e, "code", None)
+    if code == 429:
+        return "Đã hết hạn mức miễn phí của Gemini trong lúc này. Vui lòng thử lại sau ít phút."
+    if code in (400, 401, 403):
+        return "Khóa Gemini không hợp lệ hoặc chưa có quyền. Quản trị viên cần kiểm tra GEMINI_API_KEY."
+    if code == 404:
+        return "Mô hình Gemini được chọn không có cho khóa này. Quản trị viên hãy đặt GEMINI_MODEL sang mô hình khác."
+    return f"Không gọi được mô hình ({type(e).__name__}). Vui lòng thử lại sau."
 
 
 def render_meta(m: dict):
@@ -124,10 +125,10 @@ def chat_tab():
                 meta = {"tool_calls": [{"name": t.name, "input": t.input, "ok": t.ok, "text": t.text} for t in r.tool_calls],
                         "sources": r.sources, "warnings": r.warnings, "unsupported": r.unsupported_numbers}
             except AgentConfigError as e:
-                msg, meta = ("Tính năng hỏi đáp bằng AI chưa được bật trên bản này (chưa cấu hình kết nối Claude). "
+                msg, meta = ("Tính năng hỏi đáp bằng AI chưa được bật trên bản này (chưa cấu hình khóa Gemini). "
                              f"Bạn vẫn có thể dùng tab *Tra số trực tiếp*.\n\n*Chi tiết cho quản trị viên: {e}*"), {}
             except Exception as e:                                           # noqa: BLE001 - không lộ stack trace ra giao diện
-                msg, meta = f"Không gọi được mô hình ({type(e).__name__}). Vui lòng thử lại sau.", {}
+                msg, meta = friendly_error(e), {}
         st.markdown(msg)
         render_meta(meta)
     st.session_state.ui.append({"role": "assistant", "content": msg, "meta": meta})

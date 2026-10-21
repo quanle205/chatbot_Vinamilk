@@ -1,7 +1,6 @@
-# Thư viện chạy ứng dụng (giao diện + agent). Streamlit Community Cloud và Dockerfile cài file này.
-# Pipeline xử lý dữ liệu (OCR, parse, nạp DuckDB, thử embedding) dùng requirements-pipeline.txt.
+﻿# Thư viện chạy ứng dụng Streamlit. Pipeline xử lý dữ liệu (OCR, parse, nạp DuckDB) dùng requirements-pipeline.txt.
 duckdb==1.5.6
 numpy>=2.0
 scikit-learn>=1.5
 streamlit>=1.40
-anthropic[vertex]>=2.0
+google-genai>=2.0

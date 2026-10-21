@@ -7,9 +7,7 @@ from pathlib import Path
 from ..tools.facts import Period
 from ..tools.registry import TOOL_SPECS, call_tool
 
-ROOT = Path(__file__).resolve().parents[2]
-RETRIEVER_PATH = ROOT / "data" / "processed" / "retriever.pkl"
-CHUNKS_PATH = ROOT / "data" / "processed" / "chunks.jsonl"
+CHUNKS_PATH = Path(__file__).resolve().parents[2] / "data" / "processed" / "chunks.jsonl"
 SNIPPET_CHARS = 1600
 
 SEARCH_SPEC = {
@@ -39,8 +37,7 @@ class Toolbox:
     def retriever(self):
         if self._retriever is None:
             from ..rag.retriever import HybridRetriever
-            self._retriever = (HybridRetriever.load(RETRIEVER_PATH) if RETRIEVER_PATH.exists()
-                               else HybridRetriever.from_jsonl(CHUNKS_PATH))
+            self._retriever = HybridRetriever.from_jsonl(CHUNKS_PATH)         # dựng trong ~6 giây, giữ trong bộ nhớ
         return self._retriever
 
     def run(self, name: str, args: dict) -> dict:

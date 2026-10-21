@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.tools.analyst import Analyst  # noqa: E402
 from src.tools.calc import calculate  # noqa: E402
-from src.tools.facts import Facts, Period  # noqa: E402
+from src.tools.facts import Facts  # noqa: E402
 from src.tools.metrics import find_metrics, get_metric  # noqa: E402
 from src.tools.registry import TOOL_SPECS, call_tool  # noqa: E402
 

@@ -7,15 +7,14 @@ vì mọi báo cáo đều có cùng tên chỉ tiêu và BM25/vector không ph�
 from __future__ import annotations
 
 import json
-import pickle
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 
 from .bm25 import BM25
-from .embed import make_embedder, similarity
-from .text import find_periods
+from .embed import NgramEmbedder, similarity
+from .text import accent_free, find_periods
 
 RRF_K = 60
 CANDIDATES = 50
@@ -31,33 +30,22 @@ class Hit:
 
 
 class HybridRetriever:
-    def __init__(self, chunks: list[dict], embedder=None):
+    def __init__(self, chunks: list[dict]):
         self.chunks = chunks
         texts = [c["text"] for c in chunks]
         self.bm25 = BM25(texts)
-        self.embedder = (embedder or make_embedder("ngram")).fit(texts)
-        # Đã đo (eval/retrieval_check.py, 14 câu từ khóa + 10 câu đồng nghĩa): với cả n-gam lẫn
-        # paraphrase-multilingual-MiniLM, nhánh vector đều kém BM25 và trọng số bằng BM25 làm hybrid
-        # tụt hạng (MRR 0,57-0,77 so với 0,84), nên giữ trọng số thấp để BM25 quyết định chính.
+        self.embedder = NgramEmbedder().fit(texts)
+        # Đã đo (eval/retrieval_check.py, 14 câu từ khóa + 10 câu đồng nghĩa): nhánh vector kém BM25 và
+        # trọng số bằng BM25 làm hybrid tụt hạng (MRR 0,57-0,77 so với 0,84), nên giữ trọng số thấp.
         self.vector_weight = 0.15
         self.doc_vecs = self.embedder.encode_docs(texts)
         self.docs = np.array([c["doc"] for c in chunks])
         self.kinds = np.array([c["kind"] for c in chunks])
 
-    # ---------------------------------------------------------------- lưu / nạp
-    def save(self, path: str | Path):
-        with open(path, "wb") as f:
-            pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
-
     @staticmethod
-    def load(path: str | Path) -> "HybridRetriever":
-        with open(path, "rb") as f:
-            return pickle.load(f)
-
-    @staticmethod
-    def from_jsonl(path: str | Path, embedder=None) -> "HybridRetriever":
-        chunks = [json.loads(l) for l in open(path, encoding="utf-8") if l.strip()]
-        return HybridRetriever(chunks, embedder)
+    def from_jsonl(path: str | Path) -> "HybridRetriever":
+        with open(path, encoding="utf-8") as f:
+            return HybridRetriever([json.loads(line) for line in f if line.strip()])
 
     # ---------------------------------------------------------------- tìm kiếm
     def _allowed(self, query: str, docs: set[str] | None) -> np.ndarray:
@@ -78,7 +66,7 @@ class HybridRetriever:
 
     def search(self, query: str, k: int = 6, docs: set[str] | None = None, mode: str = "hybrid",
                weights: dict | None = None) -> list[Hit]:
-        w = {"bm25": 1.0, "vector": getattr(self, "vector_weight", 1.0), **(weights or {})}
+        w = {"bm25": 1.0, "vector": self.vector_weight, **(weights or {})}
         mask = self._allowed(query, docs)
         rankings: dict[str, list[int]] = {}
         if mode in ("hybrid", "bm25"):
@@ -91,7 +79,6 @@ class HybridRetriever:
             for r, i in enumerate(ranking, 1):
                 fused[i] = fused.get(i, 0.0) + w[name] / (RRF_K + r)
         # Câu hỏi hỏi số liệu -> đoạn bảng số liệu (đã đối chiếu) ưu tiên hơn đoạn thuyết minh.
-        from .text import accent_free
         if any(h in accent_free(query.lower()) for h in NUMERIC_HINTS):
             for i in fused:
                 if self.kinds[i] == "bang_so_lieu":

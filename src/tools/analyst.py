@@ -11,7 +11,7 @@ from typing import Callable
 
 from ..rag.text import fmt_ty, fmt_vnd
 from .facts import DataUnavailable, Facts, Period, Value
-from .metrics import METRICS, Metric, find_metrics, get_metric
+from .metrics import Metric, find_metrics, get_metric
 
 STATEMENT_VI = {"CDKT": "Báo cáo tình hình tài chính", "KQKD": "Báo cáo kết quả hoạt động kinh doanh",
                 "LCTT": "Báo cáo lưu chuyển tiền tệ"}

@@ -1,33 +1,56 @@
 # duanNLP - Chatbot phân tích BCTC hợp nhất Vinamilk 2025-2026
 
+Chatbot hỏi đáp trên báo cáo tài chính hợp nhất của Vinamilk (quý 1/2025 – quý 2/2026): tra số liệu, tính tỷ số và
+tăng trưởng, tìm nội dung thuyết minh. Số liệu lấy từ PDF bằng OCR, đã đối chiếu thủ công; câu trả lời kèm nguồn
+(báo cáo, trang PDF) và cảnh báo khi một con số không khớp kết quả công cụ.
+
 | Thư mục | Nội dung |
 |---|---|
-| data/raw | PDF BCTC hợp nhất q1-2025 ... q2-2026 |
-| data/interim | kết quả OCR (financial_rows.csv, *.jsonl), statements_long.csv |
-| data/processed | financials.duckdb, overrides.csv, chunks.jsonl |
-| src/ingest | preprocess.py (PDF->OCR), parse_statements.py, repair_identities.py |
-| src/rag | chunking, BM25 + vector + RRF (`python -m src.rag.chunking`, `python -m src.rag.build_index`) |
-| src/tools | tra số từ DuckDB, tỷ số, tăng trưởng, máy tính (`TOOL_SPECS`, `call_tool`); kiểm thử: `python tests/test_tools.py` |
-| src/agent | agent Claude tool-use (Vertex AI) gọi công cụ tra số + retriever; kiểm tra số trong câu trả lời bám nguồn |
-| app | giao diện Streamlit (`streamlit run app/streamlit_app.py`) |
-| deploy, Dockerfile | triển khai Google Cloud Run (`deploy/cloudrun.ps1`, mặc định chỉ in lệnh) |
+| data/raw | PDF BCTC hợp nhất q1-2025 ... q2-2026 (không đưa lên git) |
+| data/interim | kết quả OCR và parse trung gian (không đưa lên git) |
+| data/processed | `financials.duckdb`, `chunks.jsonl`, `overrides.csv` (số đã đối chiếu tay với PDF) |
+| src/ingest | pipeline dữ liệu: `preprocess.py` (PDF -> OCR), `parse_statements.py`, `repair_identities.py`, `build_db.py` |
+| src/rag | `chunking.py`, BM25 + vector n-gam + RRF (`retriever.py`) |
+| src/tools | tra số, tỷ số, tăng trưởng, máy tính (`TOOL_SPECS`, `call_tool`) |
+| src/agent | agent Gemini function-calling gọi công cụ + retriever; kiểm tra số bám nguồn (`guard.py`) |
+| app | giao diện Streamlit |
+| tests, eval | kiểm thử và đo chất lượng truy xuất |
 
 ## Chạy chatbot
 
-Claude chạy trên Google Cloud Vertex AI, cần dự án GCP đã bật Claude Opus 5.5 trong Model Garden:
-
 ```
-gcloud auth application-default login
-$env:ANTHROPIC_VERTEX_PROJECT_ID = "ten-du-an"      # tùy chọn: CLOUD_ML_REGION (mặc định global), VINAMILK_MODEL
+pip install -r requirements.txt
 streamlit run app/streamlit_app.py
 ```
 
-Không có cấu hình Vertex thì tab "Tra số trực tiếp" vẫn dùng được. Kiểm thử (không gọi Claude thật):
-`python tests/test_tools.py`, `python tests/test_agent.py`, `python tests/test_app.py`.
+Tab "Tra số trực tiếp" dùng ngay được. Tab "Hỏi đáp" cần khóa Gemini miễn phí (aistudio.google.com/apikey):
+đặt biến môi trường `GEMINI_API_KEY` (tùy chọn `GEMINI_MODEL`, mặc định `gemini-3.8-flash`; `SESSION_LIMIT`,
+`DAILY_LIMIT` giới hạn số lượt hỏi). Trên Streamlit Community Cloud, đặt trong Settings -> Secrets:
 
-Triển khai: Cloud Run (`deploy/cloudrun.ps1`, dùng tài khoản dịch vụ, không cần GitHub) hoặc Streamlit Community Cloud
-(cần đẩy repo lên GitHub, đặt `ANTHROPIC_VERTEX_PROJECT_ID` và bảng `[gcp_service_account]` trong Secrets của ứng dụng;
-không bao giờ commit file khóa JSON).
-| app, eval, notebooks | giao diện, đánh giá, thử nghiệm |
+```
+GEMINI_API_KEY = "khoa-cua-ban"
+```
 
-Pipeline: preprocess.py -> parse_statements.py -> repair_identities.py (đọc data/processed/overrides.csv) -> build_db.py (data/processed/financials.duckdb).
+Không commit khóa lên git.
+
+## Kiểm thử
+
+```
+python tests/test_tools.py
+python tests/test_agent.py
+python tests/test_app.py
+python eval/retrieval_check.py
+```
+
+Các test không gọi mạng (Gemini được thay bằng client giả); chất lượng câu trả lời thật chưa được đo.
+
+## Chạy lại pipeline dữ liệu
+
+```
+pip install -r requirements-pipeline.txt        # cần thêm Tesseract (có gói tiếng Việt) và poppler
+python src/ingest/preprocess.py --input data/raw --output data/interim
+python src/ingest/parse_statements.py --pages-dir data/interim --output data/interim
+python src/ingest/repair_identities.py --parse-dir src/ingest --csv data/interim/statements_long.csv --out data/interim --overrides data/processed/overrides.csv
+python src/ingest/build_db.py
+python -m src.rag.chunking
+```

@@ -1,7 +1,8 @@
-"""Kiểm thử agent bằng client giả (không gọi Claude thật, không tốn tiền). Chạy: python tests/test_agent.py
+"""Kiểm thử agent bằng client Gemini giả (không gọi mạng, không tốn hạn mức). Chạy: python tests/test_agent.py
 
-Chỉ kiểm tra phần mã của mình: vòng lặp tool-use, gom nguồn, bảo vệ số liệu, xử lý lỗi/từ chối/hết bước.
-KHÔNG kiểm tra chất lượng câu trả lời của mô hình thật; việc đó cần gọi Vertex AI (xem README).
+Chỉ kiểm tra phần mã của mình: vòng lặp function-calling, gom nguồn, bảo vệ số liệu, xử lý lỗi/chặn/hết bước.
+KHÔNG kiểm tra chất lượng câu trả lời của Gemini thật, cũng không kiểm tra server chấp nhận schema công cụ;
+việc đó cần khóa GEMINI_API_KEY thật.
 """
 import os
 import sys
@@ -10,31 +11,36 @@ from types import SimpleNamespace as NS
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.agent.agent import REFUSAL_TEXT, AgentConfigError, VinamilkAgent, make_client  # noqa: E402
+from google.genai import types  # noqa: E402
+
+from src.agent.agent import REFUSAL_TEXT, AgentConfigError, VinamilkAgent, _clean_schema, make_client  # noqa: E402
 from src.agent.guard import find_unsupported_numbers, numbers_in_text  # noqa: E402
 from src.agent.prompts import SYSTEM_PROMPT  # noqa: E402
 from src.agent.toolbox import Toolbox  # noqa: E402
 
+USAGE = NS(prompt_token_count=100, candidates_token_count=20)
+
 
 def text(t):
-    return NS(type="text", text=t)
+    return types.Part(text=t)
 
 
-def tool(id_, name, **inp):
-    return NS(type="tool_use", id=id_, name=name, input=inp)
+def call(name, **args):
+    return types.Part.from_function_call(name=name, args=args)
 
 
-def resp(content, stop):
-    return NS(content=content, stop_reason=stop, usage=NS(input_tokens=100, output_tokens=20))
+def resp(parts, finish="STOP"):
+    return NS(candidates=[NS(content=types.Content(role="model", parts=parts), finish_reason=NS(name=finish))],
+              usage_metadata=USAGE)
 
 
 class FakeClient:
     def __init__(self, script):
         self.script, self.calls = list(script), []
-        self.messages = self
+        self.models = self
 
-    def create(self, **kw):
-        self.calls.append({**kw, "n_messages": len(kw["messages"])})
+    def generate_content(self, **kw):
+        self.calls.append({**kw, "n_contents": len(kw["contents"])})
         item = self.script.pop(0)
         if isinstance(item, Exception):
             raise item
@@ -46,87 +52,109 @@ def agent(script, **kw):
 
 
 def test_parallel_tool_calls_loop_and_sources():
-    a = agent([resp([text("Để mình tra."), tool("t1", "get_metric", metric="doanh thu thuần", period="Q1/2026"),
-                     tool("t2", "get_growth", metric="doanh thu thuần", period="Q1/2026", kind="yoy")], "tool_use"),
-               resp([text("Doanh thu thuần quý 1/2026 là 16.148,7 tỷ đồng, tăng 24,6% so với cùng kỳ.")], "end_turn")])
-    msgs = []
-    r = a.ask("Doanh thu thuần Q1/2026 và tăng trưởng?", msgs)
-    assert r.answer.startswith("Doanh thu thuần quý 1/2026") and r.steps == 2 and r.stop_reason == "end_turn"
+    a = agent([resp([text("Để mình tra."), call("get_metric", metric="doanh thu thuần", period="Q1/2026"),
+                     call("get_growth", metric="doanh thu thuần", period="Q1/2026", kind="yoy")]),
+               resp([text("Doanh thu thuần quý 1/2026 là 16.148,7 tỷ đồng, tăng 24,6% so với cùng kỳ.")])])
+    hist = []
+    r = a.ask("Doanh thu thuần Q1/2026 và tăng trưởng?", hist)
+    assert r.answer.startswith("Doanh thu thuần quý 1/2026") and r.steps == 2 and r.stop_reason == "STOP"
     assert [t.name for t in r.tool_calls] == ["get_metric", "get_growth"] and all(t.ok for t in r.tool_calls)
     assert r.unsupported_numbers == [] and r.warnings == []
     assert {s["doc"] for s in r.sources} == {"q1-2026"} and any(s["page"] == 11 for s in r.sources)
-    # tất cả tool_result trong MỘT tin nhắn user, đúng id; lịch sử: user, assistant, user(tool_result), assistant
-    assert [m["role"] for m in msgs] == ["user", "assistant", "user", "assistant"]
-    assert [b["tool_use_id"] for b in msgs[2]["content"]] == ["t1", "t2"]
-    first = a.client.calls[0]
-    assert first["system"] == SYSTEM_PROMPT and first["model"] == "claude-opus-5-5"
-    assert "tool_choice" not in first and "thinking" not in first and first["output_config"] == {"effort": "medium"}
-    assert {t["name"] for t in first["tools"]} >= {"get_metric", "get_ratio", "get_growth", "search_documents", "calculate"}
+    # lịch sử: user, model(gọi hàm), user(kết quả), model; mọi kết quả hàm nằm trong MỘT lượt user
+    assert [c.role for c in hist] == ["user", "model", "user", "model"]
+    assert [p.function_response.name for p in hist[2].parts] == ["get_metric", "get_growth"]
+    assert "output" in hist[2].parts[0].function_response.response
+    cfg = a.client.calls[0]["config"]
+    assert a.client.calls[0]["model"] == "gemini-3.8-flash" and cfg.system_instruction == SYSTEM_PROMPT
+    assert cfg.automatic_function_calling.disable is True
+    decls = {d.name: d for d in cfg.tools[0].function_declarations}
+    assert set(decls) >= {"get_metric", "get_ratio", "get_growth", "search_documents", "calculate"}
+    assert set(decls["get_metric"].parameters_json_schema["properties"]) == {"metric", "period", "basis"}
     assert r.usage == {"input_tokens": 200, "output_tokens": 40}
 
 
 def test_multi_turn_history_is_append_only():
-    a = agent([resp([text("Câu 1")], "end_turn"), resp([text("Câu 2")], "end_turn")])
-    msgs = []
-    a.ask("a", msgs)
-    snapshot = list(msgs)
-    a.ask("b", msgs)
-    assert msgs[:2] == snapshot and len(msgs) == 4 and a.client.calls[1]["n_messages"] == 3
+    a = agent([resp([text("Câu 1")]), resp([text("Câu 2")])])
+    hist = []
+    a.ask("a", hist)
+    snapshot = list(hist)
+    a.ask("b", hist)
+    assert hist[:2] == snapshot and len(hist) == 4 and a.client.calls[1]["n_contents"] == 3
 
 
 def test_unsupported_number_is_flagged():
-    a = agent([resp([tool("t1", "get_metric", metric="doanh thu thuần", period="Q1/2026")], "tool_use"),
-               resp([text("Doanh thu là 16.500 tỷ đồng.")], "end_turn")])
+    a = agent([resp([call("get_metric", metric="doanh thu thuần", period="Q1/2026")]),
+               resp([text("Doanh thu là 16.500 tỷ đồng.")])])
     assert a.ask("q").unsupported_numbers == ["16.500"]
 
 
 def test_tool_error_is_reported_as_error_result():
-    a = agent([resp([tool("t1", "get_metric", metric="doanh thu thuần", period="Q3/2026")], "tool_use"),
-               resp([text("Chưa có báo cáo quý 3/2026.")], "end_turn")])
-    msgs = []
-    r = a.ask("Doanh thu Q3/2026?", msgs)
-    tr = msgs[2]["content"][0]
-    assert tr["is_error"] is True and tr["content"].startswith("LỖI:") and not r.tool_calls[0].ok and r.sources == []
+    a = agent([resp([call("get_metric", metric="doanh thu thuần", period="Q3/2026")]),
+               resp([text("Chưa có báo cáo quý 3/2026.")])])
+    hist = []
+    r = a.ask("Doanh thu Q3/2026?", hist)
+    fr = hist[2].parts[0].function_response.response
+    assert fr["error"].startswith("LỖI:") and not r.tool_calls[0].ok and r.sources == []
 
 
 def test_unknown_tool_does_not_crash():
-    a = agent([resp([tool("t1", "xoa_du_lieu", x=1)], "tool_use"), resp([text("Xong")], "end_turn")])
-    msgs = []
-    a.ask("q", msgs)
-    assert msgs[2]["content"][0]["is_error"] is True
+    a = agent([resp([call("xoa_du_lieu", x=1)]), resp([text("Xong")])])
+    hist = []
+    a.ask("q", hist)
+    assert "error" in hist[2].parts[0].function_response.response
 
 
 def test_max_steps_stops_loop_with_warning():
-    loop = [resp([tool(f"t{i}", "get_metric", metric="tong tai san", period="Q1/2026")], "tool_use") for i in range(3)]
+    loop = [resp([call("get_metric", metric="tong tai san", period="Q1/2026")]) for _ in range(3)]
     r = agent(loop, max_steps=3).ask("q")
     assert r.steps == 3 and any("hết 3 bước" in w for w in r.warnings) and r.answer
 
 
 def test_exception_rolls_back_history():
     a = agent([RuntimeError("mạng lỗi")])
-    msgs = [{"role": "user", "content": "cũ"}, {"role": "assistant", "content": "cũ"}]
+    hist = [types.Content(role="user", parts=[text("cũ")]), types.Content(role="model", parts=[text("cũ")])]
     try:
-        a.ask("mới", msgs)
+        a.ask("mới", hist)
         raise AssertionError("phải ném lỗi")
     except RuntimeError:
         pass
-    assert len(msgs) == 2
+    assert len(hist) == 2
 
 
-def test_refusal_and_max_tokens():
-    r = agent([resp([], "refusal")]).ask("q")
+def test_blocked_and_max_tokens():
+    blocked = NS(candidates=[NS(content=None, finish_reason=NS(name="SAFETY"))], usage_metadata=USAGE)
+    r = agent([blocked]).ask("q")
     assert r.answer == REFUSAL_TEXT and r.warnings
-    r = agent([resp([text("dở dang")], "max_tokens")]).ask("q")
+    r = agent([NS(candidates=[], usage_metadata=USAGE)]).ask("q")                  # prompt bị chặn: không có ứng viên
+    assert r.answer == REFUSAL_TEXT
+    r = agent([resp([text("dở dang")], finish="MAX_TOKENS")]).ask("q")
     assert r.answer == "dở dang" and any("cắt" in w for w in r.warnings)
 
 
+def test_thought_parts_are_not_shown():
+    thought = types.Part(text="suy nghĩ nội bộ", thought=True)
+    assert agent([resp([thought, text("Câu trả lời.")])]).ask("q").answer == "Câu trả lời."
+
+
 def test_search_documents_with_real_retriever():
-    tb = Toolbox()                                              # nạp data/processed/retriever.pkl
+    tb = Toolbox()                                              # dựng chỉ mục từ data/processed/chunks.jsonl
     out = tb.run("search_documents", {"query": "Vay ngắn hạn 30/6/2025", "period": "Q2/2025", "k": 3})
     assert out["ok"] and all(s["doc"] == "q2-2025" for s in out["sources"]) and "mã số 320" in out["text"]
     assert not tb.run("search_documents", {})["ok"]
     assert not tb.run("search_documents", {"query": "x", "period": "hôm qua"})["ok"]
     assert tb.run("get_metric", {"metric": "tổng tài sản", "period": "Q2/2026"})["ok"]
+
+
+def test_schema_cleaning_keeps_parameter_names_and_drops_unsupported_keys():
+    s = {"type": "object", "required": ["query"], "additionalProperties": False, "properties": {
+        "query": {"type": "string", "description": "d"},
+        "k": {"type": "integer", "minimum": 1, "maximum": 8, "default": 5},
+        "type": {"type": "string", "enum": ["a", "b"]}}}                      # tham số tên "type" không bị lọc nhầm
+    out = _clean_schema(s)
+    assert set(out["properties"]) == {"query", "k", "type"} and "additionalProperties" not in out
+    assert out["properties"]["k"] == {"type": "integer", "minimum": 1, "maximum": 8}
+    assert out["properties"]["type"]["enum"] == ["a", "b"]
 
 
 def test_guard():
@@ -137,19 +165,19 @@ def test_guard():
     assert find_unsupported_numbers("Quý 1/2026, mã số 10, năm 2025, 12 tháng", tools) == []
 
 
-def test_make_client_needs_project():
-    saved = {k: os.environ.pop(k, None) for k in ("ANTHROPIC_VERTEX_PROJECT_ID", "GOOGLE_CLOUD_PROJECT")}
+def test_make_client_needs_api_key():
+    keys = ("GEMINI_API_KEY", "GOOGLE_API_KEY")
+    saved = {k: os.environ.pop(k, None) for k in keys}
     try:
         try:
             make_client()
-            raise AssertionError("phải báo thiếu project")
+            raise AssertionError("phải báo thiếu khóa")
         except AgentConfigError:
             pass
-        os.environ["ANTHROPIC_VERTEX_PROJECT_ID"] = "demo-project"
-        c = make_client()
-        assert type(c).__name__ == "AnthropicVertex"
+        os.environ["GEMINI_API_KEY"] = "khoa-gia"
+        assert type(make_client()).__name__ == "Client"
     finally:
-        os.environ.pop("ANTHROPIC_VERTEX_PROJECT_ID", None)
+        os.environ.pop("GEMINI_API_KEY", None)
         for k, v in saved.items():
             if v is not None:
                 os.environ[k] = v

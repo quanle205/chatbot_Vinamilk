@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from .analyst import Analyst
 from .calc import calculate
-from .metrics import METRICS
 
 _PERIOD = {"type": "string", "description": "Kỳ báo cáo, dạng 'Q1/2026'. Có Q1/2025 đến Q2/2026."}
 _BASIS = {"type": "string", "enum": ["quy", "luy_ke"], "default": "quy",
@@ -82,6 +81,3 @@ def call_tool(name: str, args: dict) -> dict:
         return {"ok": False, "error": f"Lỗi tính toán: {e}"}
     return {"ok": False, "error": f"Không có công cụ '{name}'. Có: {', '.join(t['name'] for t in TOOL_SPECS)}."}
 
-
-def list_metric_keys() -> list[str]:
-    return [m.key for m in METRICS]

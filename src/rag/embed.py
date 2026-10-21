@@ -1,16 +1,14 @@
-"""Biểu diễn vector cho truy xuất ngữ nghĩa. Hai backend cùng giao diện fit/encode_docs/encode_query:
+"""Biểu diễn vector cho nhánh truy xuất thứ hai: TF-IDF n-gam ký tự không dấu (scikit-learn).
 
-  ngram     TF-IDF n-gam ký tự không dấu (scikit-learn, chạy ngay, không tải mô hình).
-            Chịu được lỗi OCR và sai khác dấu, nhưng KHÔNG hiểu đồng nghĩa.
-  fastembed mô hình embedding đa ngữ chạy trên CPU qua ONNX (cần tải trọng số lần đầu).
+Chịu được lỗi OCR và sai khác dấu nhưng không hiểu đồng nghĩa. Đã thử mô hình embedding đa ngữ
+(paraphrase-multilingual-MiniLM): không tốt hơn BM25 trên dữ liệu số liệu này nên không giữ lại.
 """
 from __future__ import annotations
 
 import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 from .text import accent_free, normalize
-
-DEFAULT_FASTEMBED_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"  # ~0,22 GB, 384 chiều
 
 
 def _prep(s: str) -> str:
@@ -18,10 +16,7 @@ def _prep(s: str) -> str:
 
 
 class NgramEmbedder:
-    name = "ngram"
-
     def __init__(self):
-        from sklearn.feature_extraction.text import TfidfVectorizer
         self.vec = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), sublinear_tf=True, min_df=2,
                                    preprocessor=_prep)
 
@@ -36,44 +31,5 @@ class NgramEmbedder:
         return self.vec.transform([q])
 
 
-class FastEmbedder:
-    name = "fastembed"
-
-    def __init__(self, model: str = DEFAULT_FASTEMBED_MODEL):
-        self.model_name = model
-        self._model = None
-        self.e5 = "e5" in model.lower()
-
-    @property
-    def model(self):                      # nạp lười: phiên ONNX không pickle được nên không lưu cùng chỉ mục
-        if self._model is None:
-            from fastembed import TextEmbedding
-            self._model = TextEmbedding(model_name=self.model_name)
-        return self._model
-
-    def __getstate__(self):
-        return {**self.__dict__, "_model": None}
-
-    def fit(self, texts):
-        return self
-
-    def encode_docs(self, texts):
-        pre = "passage: " if self.e5 else ""
-        return np.array(list(self.model.embed([pre + t for t in texts], batch_size=16)), dtype=np.float32)
-
-    def encode_query(self, q):
-        pre = "query: " if self.e5 else ""
-        return np.array(list(self.model.embed([pre + q])), dtype=np.float32)
-
-
-def make_embedder(kind: str = "ngram", **kw):
-    if kind == "ngram":
-        return NgramEmbedder()
-    if kind == "fastembed":
-        return FastEmbedder(**kw)
-    raise ValueError(f"backend không hỗ trợ: {kind}")
-
-
 def similarity(doc_matrix, q_vec) -> np.ndarray:
-    s = doc_matrix @ q_vec.T if not isinstance(doc_matrix, np.ndarray) else doc_matrix @ q_vec[0]
-    return np.asarray(s.todense()).ravel() if hasattr(s, "todense") else np.asarray(s).ravel()
+    return np.asarray((doc_matrix @ q_vec.T).todense()).ravel()
