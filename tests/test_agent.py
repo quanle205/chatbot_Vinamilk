@@ -132,6 +132,31 @@ def test_blocked_and_max_tokens():
     assert r.answer == "dở dang" and any("cắt" in w for w in r.warnings)
 
 
+class HttpError(Exception):
+    def __init__(self, code):
+        super().__init__(f"{code} loi")
+        self.code = code
+
+
+def test_transient_server_errors_are_retried():
+    a = agent([HttpError(503), HttpError(500), resp([text("Đã có kết quả.")])], retry_delays=(0, 0, 0))
+    r = a.ask("q")
+    assert r.answer == "Đã có kết quả." and len(a.client.calls) == 3
+    a = agent([HttpError(503)] * 4, retry_delays=(0, 0, 0))                       # hỏng dai dẳng: thử 1 + 3 lần rồi ném lỗi
+    try:
+        a.ask("q")
+        raise AssertionError("phải ném lỗi sau khi hết lần thử")
+    except HttpError:
+        pass
+    assert len(a.client.calls) == 4
+    a = agent([HttpError(429)], retry_delays=(0, 0, 0))                           # 429/400 không thử lại ngay
+    try:
+        a.ask("q")
+    except HttpError:
+        pass
+    assert len(a.client.calls) == 1
+
+
 def test_thought_parts_are_not_shown():
     thought = types.Part(text="suy nghĩ nội bộ", thought=True)
     assert agent([resp([thought, text("Câu trả lời.")])]).ask("q").answer == "Câu trả lời."

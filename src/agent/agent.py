@@ -8,6 +8,7 @@ Client có thể tiêm vào (`VinamilkAgent(client=...)`) để kiểm thử mà
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass, field
 
 from google import genai
@@ -19,6 +20,7 @@ from .toolbox import Toolbox, result_for_model
 
 DEFAULT_MODEL = "gemini-3.8-flash"
 REFUSAL_TEXT = "Mình không thể trả lời câu hỏi này. Bạn có thể hỏi về số liệu và chỉ số trong BCTC hợp nhất của Vinamilk."
+TRANSIENT_CODES = {500, 503, 504}
 BLOCKED = {"SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "RECITATION", "IMAGE_SAFETY"}
 SCHEMA_KEYS = {"type", "required", "enum", "description", "minimum", "maximum"}
 
@@ -78,8 +80,9 @@ class AgentResult:
 
 class VinamilkAgent:
     def __init__(self, client=None, model: str | None = None, toolbox: Toolbox | None = None,
-                 max_steps: int = 8, max_tokens: int = 8192):
+                 max_steps: int = 8, max_tokens: int = 8192, retry_delays: tuple = (2.0, 5.0, 10.0)):
         self._client = client
+        self.retry_delays = retry_delays
         self.model = model or os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
         self.toolbox = toolbox or Toolbox()
         self.max_steps = max_steps
@@ -92,6 +95,16 @@ class VinamilkAgent:
         if self._client is None:
             self._client = make_client()
         return self._client
+
+    def _generate(self, contents: list):
+        """Gọi Gemini; thử lại khi máy chủ báo lỗi tạm thời (500/503/504: quá tải, hết thời gian)."""
+        for delay in (*self.retry_delays, None):
+            try:
+                return self.client.models.generate_content(model=self.model, contents=contents, config=self.config)
+            except Exception as e:                                         # noqa: BLE001 - lỗi khác được ném lại nguyên vẹn
+                if delay is None or getattr(e, "code", None) not in TRANSIENT_CODES:
+                    raise
+                time.sleep(delay)
 
     def ask(self, question: str, history: list | None = None) -> AgentResult:
         """Hỏi một câu. `history` là lịch sử hội thoại (được nối thêm tại chỗ); None = hội thoại mới.
@@ -106,7 +119,7 @@ class VinamilkAgent:
         tool_results: list = []
         try:
             for step in range(1, self.max_steps + 1):
-                resp = self.client.models.generate_content(model=self.model, contents=contents, config=self.config)
+                resp = self._generate(contents)
                 res.steps = step
                 usage = resp.usage_metadata
                 res.usage["input_tokens"] += (getattr(usage, "prompt_token_count", 0) or 0)

@@ -66,6 +66,16 @@ def test_session_limit_and_api_errors_are_handled():
     assert "hết 2 lượt hỏi" in all_text(at)
 
 
+def test_server_error_shows_code_and_message_but_retries_first():
+    class Overloaded(Exception):
+        code, status, message = 503, "UNAVAILABLE", "The model is overloaded. Please try again later."
+    agent_mod.time.sleep = lambda s: None                                     # không chờ thật giữa các lần thử
+    at = fresh([Overloaded()] * 4, GEMINI_API_KEY="demo")
+    at.chat_input[0].set_value("câu hỏi").run()
+    body = all_text(at)
+    assert not at.exception and "quá tải" in body and "503 UNAVAILABLE" in body and "overloaded" in body
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted(globals().items()):

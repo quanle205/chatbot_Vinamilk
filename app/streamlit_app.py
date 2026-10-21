@@ -4,6 +4,7 @@ Cấu hình qua biến môi trường hoặc Streamlit Secrets: GEMINI_API_KEY, 
 Giới hạn lượt hỏi cho bản public: SESSION_LIMIT (lượt/phiên, mặc định 15) và DAILY_LIMIT (lượt/ngày toàn dịch vụ, mặc định 300).
 """
 import datetime
+import logging
 import os
 import sys
 import threading
@@ -67,6 +68,11 @@ def get_agent() -> VinamilkAgent:
 def friendly_error(e: Exception) -> str:
     """Thông báo dễ hiểu cho lỗi gọi Gemini; không đưa chi tiết kỹ thuật hay khóa ra giao diện."""
     code = getattr(e, "code", None)
+    logging.getLogger("chatbot").exception("Lỗi gọi Gemini")               # đầy đủ trong Manage app -> logs
+    if isinstance(code, int) and code >= 500:
+        detail = f"{code} {getattr(e, 'status', '') or ''}: {str(getattr(e, 'message', '') or e)[:200]}".strip()
+        return ("Máy chủ Gemini đang quá tải hoặc gặp lỗi tạm thời (đã tự thử lại vài lần). Vui lòng thử lại sau ít phút."
+                f"\n\n*Chi tiết: {detail}*")
     if code == 429:
         return "Đã hết hạn mức miễn phí của Gemini trong lúc này. Vui lòng thử lại sau ít phút."
     if code in (400, 401, 403):
