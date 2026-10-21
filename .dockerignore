@@ -1,0 +1,13 @@
+.git
+**/__pycache__
+**/*.pyc
+data/raw
+data/interim
+data/processed/retriever*.pkl
+data/processed/overrides.csv
+notebooks
+tests
+eval
+*.docx
+*.ps1
+deploy

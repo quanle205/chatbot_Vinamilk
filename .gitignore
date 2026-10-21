@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+.streamlit/secrets.toml
+*.json.key
+# Dữ liệu trung gian và bản PDF gốc (21 MB) không cần cho ứng dụng; chạy lại pipeline để tạo.
+data/raw/
+data/interim/
+# Chỉ mục truy xuất được dựng lại khi cần (tránh lệch phiên bản scikit-learn khi nạp pickle).
+data/processed/retriever*.pkl
+# Báo cáo môn học
+*.docx
+.claude/
