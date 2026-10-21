@@ -40,7 +40,8 @@ class FakeClient:
         self.models = self
 
     def generate_content(self, **kw):
-        self.calls.append({**kw, "n_contents": len(kw["contents"])})
+        # chụp nội dung ngay lúc gọi: agent sẽ rút gọn lịch sử sau khi trả lời xong
+        self.calls.append({**kw, "contents": list(kw["contents"]), "n_contents": len(kw["contents"])})
         item = self.script.pop(0)
         if isinstance(item, Exception):
             raise item
@@ -48,6 +49,7 @@ class FakeClient:
 
 
 def agent(script, **kw):
+    kw.setdefault("fallback_models", ())                  # mặc định không có mô hình dự phòng để kịch bản dễ đoán
     return VinamilkAgent(client=FakeClient(script), toolbox=kw.pop("toolbox", Toolbox(retriever=object())), **kw)
 
 
@@ -61,10 +63,15 @@ def test_parallel_tool_calls_loop_and_sources():
     assert [t.name for t in r.tool_calls] == ["get_metric", "get_growth"] and all(t.ok for t in r.tool_calls)
     assert r.unsupported_numbers == [] and r.warnings == []
     assert {s["doc"] for s in r.sources} == {"q1-2026"} and any(s["page"] == 11 for s in r.sources)
-    # lịch sử: user, model(gọi hàm), user(kết quả), model; mọi kết quả hàm nằm trong MỘT lượt user
-    assert [c.role for c in hist] == ["user", "model", "user", "model"]
-    assert [p.function_response.name for p in hist[2].parts] == ["get_metric", "get_growth"]
-    assert "output" in hist[2].parts[0].function_response.response
+    # ở bước 2, nội dung gửi đi: user, model(gọi hàm), user(kết quả); mọi kết quả hàm nằm trong MỘT lượt user
+    sent = a.client.calls[1]["contents"]
+    assert [c.role for c in sent] == ["user", "model", "user"]
+    assert [p.function_response.name for p in sent[2].parts] == ["get_metric", "get_growth"]
+    assert "output" in sent[2].parts[0].function_response.response
+    # xong câu hỏi, lịch sử chỉ còn hỏi + đáp dạng văn bản (không còn chữ ký suy luận hay kết quả hàm)
+    assert [c.role for c in hist] == ["user", "model"]
+    assert hist[1].parts[0].text == r.answer and not any(p.function_call or p.function_response for c in hist for p in c.parts)
+    assert r.model == "gemini-3.8-flash"
     cfg = a.client.calls[0]["config"]
     assert a.client.calls[0]["model"] == "gemini-3.8-flash" and cfg.system_instruction == SYSTEM_PROMPT
     assert cfg.automatic_function_calling.disable is True
@@ -92,17 +99,15 @@ def test_unsupported_number_is_flagged():
 def test_tool_error_is_reported_as_error_result():
     a = agent([resp([call("get_metric", metric="doanh thu thuần", period="Q3/2026")]),
                resp([text("Chưa có báo cáo quý 3/2026.")])])
-    hist = []
-    r = a.ask("Doanh thu Q3/2026?", hist)
-    fr = hist[2].parts[0].function_response.response
+    r = a.ask("Doanh thu Q3/2026?", [])
+    fr = a.client.calls[1]["contents"][2].parts[0].function_response.response
     assert fr["error"].startswith("LỖI:") and not r.tool_calls[0].ok and r.sources == []
 
 
 def test_unknown_tool_does_not_crash():
     a = agent([resp([call("xoa_du_lieu", x=1)]), resp([text("Xong")])])
-    hist = []
-    a.ask("q", hist)
-    assert "error" in hist[2].parts[0].function_response.response
+    a.ask("q", [])
+    assert "error" in a.client.calls[1]["contents"][2].parts[0].function_response.response
 
 
 def test_max_steps_stops_loop_with_warning():
@@ -155,6 +160,43 @@ def test_transient_server_errors_are_retried():
     except HttpError:
         pass
     assert len(a.client.calls) == 1
+
+
+def test_falls_back_to_next_model_when_primary_is_overloaded():
+    script = [HttpError(503)] * 3 + [resp([text("Từ mô hình dự phòng.")])]               # chính: 1 + 2 lần thử rồi bỏ
+    a = agent(script, model="chinh", fallback_models=("du-phong",), retry_delays=(0, 0))
+    r = a.ask("q")
+    assert r.answer == "Từ mô hình dự phòng." and r.model == "du-phong"
+    assert [c["model"] for c in a.client.calls] == ["chinh", "chinh", "chinh", "du-phong"]
+
+
+def test_quota_or_missing_model_falls_through_but_bad_request_does_not():
+    a = agent([HttpError(429), HttpError(404), resp([text("ok")])], model="a", fallback_models=("b", "c"))
+    assert a.ask("q").model == "c" and len(a.client.calls) == 3                           # 429, 404 không thử lại, sang tiếp
+    a = agent([HttpError(400)], model="a", fallback_models=("b",))
+    try:
+        a.ask("q")
+        raise AssertionError("400 phải ném lỗi ngay")
+    except HttpError:
+        pass
+    assert len(a.client.calls) == 1
+    a = agent([HttpError(503)] * 8, model="a", fallback_models=("b",), retry_delays=(0, 0))   # mọi mô hình hỏng: ném lỗi đầu tiên
+    try:
+        a.ask("q")
+        raise AssertionError("hết mô hình phải ném lỗi")
+    except HttpError as e:
+        assert e.code == 503
+
+
+def test_model_is_pinned_within_one_question_but_reset_for_the_next():
+    script = [HttpError(503)] * 3 + [resp([call("get_metric", metric="tong tai san", period="Q1/2026")]),
+                                     resp([text("Xong.")]),                               # bước 2 vẫn phải là "du-phong"
+                                     resp([text("Câu sau.")])]                           # câu sau thử lại mô hình chính trước
+    a = agent(script, model="chinh", fallback_models=("du-phong",), retry_delays=(0, 0))
+    a.ask("q1", hist := [])
+    assert [c["model"] for c in a.client.calls] == ["chinh", "chinh", "chinh", "du-phong", "du-phong"]
+    a.ask("q2", hist)
+    assert a.client.calls[-1]["model"] == "chinh" and a.client.calls[-1]["n_contents"] == 3
 
 
 def test_thought_parts_are_not_shown():

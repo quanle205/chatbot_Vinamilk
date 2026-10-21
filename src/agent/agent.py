@@ -2,7 +2,8 @@
 
 Cấu hình qua biến môi trường (trên Streamlit Cloud đặt trong Secrets, xem app/streamlit_app.py):
   GEMINI_API_KEY   khóa tạo miễn phí tại https://aistudio.google.com/apikey   [bắt buộc]
-  GEMINI_MODEL     mặc định gemini-3.8-flash; đổi nếu khóa của bạn không có quyền dùng model này
+  GEMINI_MODEL     mặc định gemini-3.8-flash
+  GEMINI_FALLBACK_MODELS  danh sách mô hình dự phòng, cách nhau dấu phẩy, dùng khi mô hình chính quá tải/hết hạn mức
 Client có thể tiêm vào (`VinamilkAgent(client=...)`) để kiểm thử mà không gọi mạng.
 """
 from __future__ import annotations
@@ -21,6 +22,8 @@ from .toolbox import Toolbox, result_for_model
 DEFAULT_MODEL = "gemini-3.8-flash"
 REFUSAL_TEXT = "Mình không thể trả lời câu hỏi này. Bạn có thể hỏi về số liệu và chỉ số trong BCTC hợp nhất của Vinamilk."
 TRANSIENT_CODES = {500, 503, 504}
+FALLTHROUGH_CODES = TRANSIENT_CODES | {429, 403, 404}       # đổi sang mô hình dự phòng; 400 (yêu cầu sai) thì không
+DEFAULT_FALLBACKS = "gemini-3.6-flash,gemini-3.5-flash-lite"
 BLOCKED = {"SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "RECITATION", "IMAGE_SAFETY"}
 SCHEMA_KEYS = {"type", "required", "enum", "description", "minimum", "maximum"}
 
@@ -74,16 +77,22 @@ class AgentResult:
     warnings: list = field(default_factory=list)
     unsupported_numbers: list = field(default_factory=list)
     stop_reason: str = ""
+    model: str = ""
     steps: int = 0
     usage: dict = field(default_factory=lambda: {"input_tokens": 0, "output_tokens": 0})
 
 
 class VinamilkAgent:
     def __init__(self, client=None, model: str | None = None, toolbox: Toolbox | None = None,
-                 max_steps: int = 8, max_tokens: int = 8192, retry_delays: tuple = (2.0, 5.0, 10.0)):
+                 max_steps: int = 8, max_tokens: int = 8192, retry_delays: tuple = (1.5, 3.0),
+                 fallback_models: tuple | None = None):
         self._client = client
         self.retry_delays = retry_delays
         self.model = model or os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
+        if fallback_models is None:
+            fallback_models = tuple(m.strip() for m in os.environ.get("GEMINI_FALLBACK_MODELS", DEFAULT_FALLBACKS).split(",")
+                                    if m.strip())
+        self.models = [self.model, *(m for m in fallback_models if m != self.model)]
         self.toolbox = toolbox or Toolbox()
         self.max_steps = max_steps
         self.config = types.GenerateContentConfig(
@@ -96,30 +105,47 @@ class VinamilkAgent:
             self._client = make_client()
         return self._client
 
-    def _generate(self, contents: list):
-        """Gọi Gemini; thử lại khi máy chủ báo lỗi tạm thời (500/503/504: quá tải, hết thời gian)."""
-        for delay in (*self.retry_delays, None):
-            try:
-                return self.client.models.generate_content(model=self.model, contents=contents, config=self.config)
-            except Exception as e:                                         # noqa: BLE001 - lỗi khác được ném lại nguyên vẹn
-                if delay is None or getattr(e, "code", None) not in TRANSIENT_CODES:
+    def _generate(self, contents: list, pinned: str | None):
+        """Gọi Gemini, trả về (tên mô hình đã trả lời, phản hồi).
+
+        Lỗi tạm thời của máy chủ (500/503/504: quá tải, hết thời gian) được thử lại vài lần; nếu mô hình vẫn lỗi hoặc
+        không dùng được với khóa này (429 hết hạn mức, 403/404) thì chuyển sang mô hình dự phòng kế tiếp.
+        Khi đã `pinned` (giữa vòng gọi công cụ của một câu hỏi) thì chỉ dùng đúng mô hình đó vì chữ ký suy luận
+        trong lượt hiện tại gắn với mô hình đã sinh ra nó.
+        """
+        first_error = None
+        for model in ([pinned] if pinned else self.models):
+            for delay in (*self.retry_delays, None):
+                try:
+                    return model, self.client.models.generate_content(model=model, contents=contents, config=self.config)
+                except Exception as e:                                     # noqa: BLE001 - lỗi khác được ném lại nguyên vẹn
+                    code = getattr(e, "code", None)
+                    first_error = first_error or e
+                    if code in TRANSIENT_CODES and delay is not None:
+                        time.sleep(delay)
+                        continue
+                    if code in FALLTHROUGH_CODES and not pinned:
+                        break                                              # sang mô hình dự phòng
                     raise
-                time.sleep(delay)
+        raise first_error
 
     def ask(self, question: str, history: list | None = None) -> AgentResult:
         """Hỏi một câu. `history` là lịch sử hội thoại (được nối thêm tại chỗ); None = hội thoại mới.
 
-        Lịch sử giữ nguyên các `Content` Gemini trả về (kể cả chữ ký suy luận) và chỉ nối thêm.
-        Nếu có lỗi giữa chừng, lịch sử được trả về trạng thái trước câu hỏi để có thể hỏi lại.
+        Trong một câu hỏi, các `Content` Gemini trả về (kể cả chữ ký suy luận) được giữ nguyên để vòng gọi công cụ
+        chạy đúng. Khi câu hỏi xong, lịch sử chỉ còn câu hỏi và câu trả lời dạng văn bản: ngắn gọn hơn, và cho phép
+        câu sau dùng mô hình khác. Nếu có lỗi giữa chừng, lịch sử trở về trạng thái trước câu hỏi.
         """
         contents = history if history is not None else []
         start = len(contents)
         contents.append(types.Content(role="user", parts=[types.Part(text=question)]))
         res = AgentResult(answer="")
         tool_results: list = []
+        pinned = None
         try:
             for step in range(1, self.max_steps + 1):
-                resp = self._generate(contents)
+                pinned, resp = self._generate(contents, pinned)
+                res.model = pinned
                 res.steps = step
                 usage = resp.usage_metadata
                 res.usage["input_tokens"] += (getattr(usage, "prompt_token_count", 0) or 0)
@@ -163,4 +189,7 @@ class VinamilkAgent:
             res.warnings.append("Câu trả lời bị cắt do hết giới hạn độ dài.")
         res.answer = text.strip() or "Mình chưa tạo được câu trả lời. Bạn thử hỏi lại cụ thể hơn (nêu chỉ tiêu và kỳ báo cáo)."
         res.unsupported_numbers = find_unsupported_numbers(res.answer, tool_results)
+        del contents[start:]                                                    # rút gọn lượt này thành hỏi + đáp dạng văn bản
+        contents.append(types.Content(role="user", parts=[types.Part(text=question)]))
+        contents.append(types.Content(role="model", parts=[types.Part(text=res.answer)]))
         return res

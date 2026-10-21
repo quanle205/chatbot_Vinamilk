@@ -83,6 +83,8 @@ def friendly_error(e: Exception) -> str:
 
 
 def render_meta(m: dict):
+    if m.get("model"):
+        st.caption(f"Mô hình: {m['model']}")
     if m.get("warnings") or m.get("unsupported"):
         if m.get("unsupported"):
             st.warning("Các số sau trong câu trả lời **không khớp** kết quả công cụ, hãy kiểm tra lại: "
@@ -129,7 +131,7 @@ def chat_tab():
                 st.session_state.asked += 1
                 msg = r.answer
                 meta = {"tool_calls": [{"name": t.name, "input": t.input, "ok": t.ok, "text": t.text} for t in r.tool_calls],
-                        "sources": r.sources, "warnings": r.warnings, "unsupported": r.unsupported_numbers}
+                        "sources": r.sources, "warnings": r.warnings, "unsupported": r.unsupported_numbers, "model": r.model}
             except AgentConfigError as e:
                 msg, meta = ("Tính năng hỏi đáp bằng AI chưa được bật trên bản này (chưa cấu hình khóa Gemini). "
                              f"Bạn vẫn có thể dùng tab *Tra số trực tiếp*.\n\n*Chi tiết cho quản trị viên: {e}*"), {}

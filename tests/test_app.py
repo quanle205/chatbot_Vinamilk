@@ -58,7 +58,7 @@ def test_chat_with_agent_shows_answer_sources_and_warning():
 def test_session_limit_and_api_errors_are_handled():
     class RateLimit(Exception):
         code = 429
-    at = fresh([RateLimit("quota")], GEMINI_API_KEY="demo", SESSION_LIMIT="2")
+    at = fresh([RateLimit("quota")] * 5, GEMINI_API_KEY="demo", SESSION_LIMIT="2")   # chính + 2 dự phòng đều hết hạn mức
     at.chat_input[0].set_value("câu 1").run()
     assert not at.exception and "hết hạn mức miễn phí" in all_text(at) and "quota" not in all_text(at)
     at.session_state["asked"] = 2
@@ -70,7 +70,7 @@ def test_server_error_shows_code_and_message_but_retries_first():
     class Overloaded(Exception):
         code, status, message = 503, "UNAVAILABLE", "The model is overloaded. Please try again later."
     agent_mod.time.sleep = lambda s: None                                     # không chờ thật giữa các lần thử
-    at = fresh([Overloaded()] * 4, GEMINI_API_KEY="demo")
+    at = fresh([Overloaded()] * 20, GEMINI_API_KEY="demo")                    # mọi mô hình (chính + dự phòng) đều bận
     at.chat_input[0].set_value("câu hỏi").run()
     body = all_text(at)
     assert not at.exception and "quá tải" in body and "503 UNAVAILABLE" in body and "overloaded" in body
