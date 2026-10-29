@@ -36,7 +36,8 @@ def make_client():
     key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not key:
         raise AgentConfigError("Chưa đặt GEMINI_API_KEY (tạo khóa miễn phí tại aistudio.google.com/apikey).")
-    return genai.Client(api_key=key)
+    timeout_ms = int(os.environ.get("GEMINI_TIMEOUT_MS", "25000"))                 # không để một cuộc gọi treo vô hạn
+    return genai.Client(api_key=key, http_options=types.HttpOptions(timeout=timeout_ms))
 
 
 def _clean_schema(schema):
@@ -85,8 +86,10 @@ class AgentResult:
 class VinamilkAgent:
     def __init__(self, client=None, model: str | None = None, toolbox: Toolbox | None = None,
                  max_steps: int = 8, max_tokens: int = 8192, retry_delays: tuple = (1.5, 3.0),
-                 fallback_models: tuple | None = None):
+                 fallback_models: tuple | None = None, deadline_s: float | None = None):
         self._client = client
+        self.deadline_s = deadline_s        # tổng thời gian tối đa cho một câu hỏi (hàm serverless bị ngắt sau 60 giây)
+        self._deadline = None
         self.retry_delays = retry_delays
         self.model = model or os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
         if fallback_models is None:
@@ -116,6 +119,8 @@ class VinamilkAgent:
         first_error = None
         for model in ([pinned] if pinned else self.models):
             for delay in (*self.retry_delays, None):
+                if self._deadline is not None and time.monotonic() > self._deadline:
+                    raise first_error or TimeoutError("Hết thời gian chờ mô hình")
                 try:
                     return model, self.client.models.generate_content(model=model, contents=contents, config=self.config)
                 except Exception as e:                                     # noqa: BLE001 - lỗi khác được ném lại nguyên vẹn
@@ -136,6 +141,7 @@ class VinamilkAgent:
         chạy đúng. Khi câu hỏi xong, lịch sử chỉ còn câu hỏi và câu trả lời dạng văn bản: ngắn gọn hơn, và cho phép
         câu sau dùng mô hình khác. Nếu có lỗi giữa chừng, lịch sử trở về trạng thái trước câu hỏi.
         """
+        self._deadline = time.monotonic() + self.deadline_s if self.deadline_s else None
         contents = history if history is not None else []
         start = len(contents)
         contents.append(types.Content(role="user", parts=[types.Part(text=question)]))

@@ -256,6 +256,18 @@ def test_system_prompt_lists_all_six_periods():
         assert q in SYSTEM_PROMPT
 
 
+def test_deadline_stops_retries_and_raises():
+    a = agent([], deadline_s=0.0001)
+    import time as _t
+    _t.sleep(0.01)
+    try:
+        a._deadline = _t.monotonic() - 1
+        a._generate([], None)
+    except TimeoutError:
+        return
+    raise AssertionError("đáng lẽ phải hết thời gian")
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted(globals().items()):
