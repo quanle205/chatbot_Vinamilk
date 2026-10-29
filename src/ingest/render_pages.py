@@ -2,7 +2,7 @@
 
 Chạy: python src/ingest/render_pages.py [--raw data/raw] [--db data/processed/financials.duckdb] [--out public/pages] [--dpi 110]
 Mỗi trang được lưu thành public/pages/<doc>/<trang>.webp (ảnh xám, ~70 KB). Cần poppler (pdftoppm) như bước OCR; PDF gốc không đưa lên git
-nên bước này chạy ở máy có data/raw, còn ảnh kết quả được đưa lên git để Vercel và Streamlit phục vụ.
+nên bước này chạy ở máy có data/raw, còn ảnh kết quả được đưa lên git để Vercel phục vụ.
 """
 import argparse
 import shutil

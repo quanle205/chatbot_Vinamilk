@@ -1,6 +1,6 @@
 """Agent hỏi đáp BCTC: Gemini function-calling (vòng lặp thủ công) gọi công cụ tra số + retriever.
 
-Cấu hình qua biến môi trường (Render: Environment; Streamlit Cloud: Secrets, xem app/streamlit_app.py):
+Cấu hình qua biến môi trường (Vercel: Settings -> Environment Variables):
   GEMINI_API_KEY   khóa tạo miễn phí tại https://aistudio.google.com/apikey   [bắt buộc]
   GEMINI_MODEL     mặc định gemini-3.8-flash
   GEMINI_FALLBACK_MODELS  danh sách mô hình dự phòng, cách nhau dấu phẩy, dùng khi mô hình chính quá tải/hết hạn mức

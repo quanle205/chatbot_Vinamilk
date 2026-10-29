@@ -13,51 +13,33 @@ tăng trưởng, tìm nội dung thuyết minh. Số liệu lấy từ PDF bằn
 | src/rag | `chunking.py`, BM25 + vector n-gam + RRF (`retriever.py`) |
 | src/tools | tra số, tỷ số, tăng trưởng, máy tính (`TOOL_SPECS`, `call_tool`) |
 | src/agent | agent Gemini function-calling gọi công cụ + retriever; kiểm tra số bám nguồn (`guard.py`) |
-| app | giao diện Streamlit |
 | src/train | huấn luyện: bộ phân loại ý định câu hỏi (`train_intent.py`) và tìm lưới tham số truy xuất (`tune_retrieval.py`) |
-| api, public | API FastAPI và trang chat tĩnh cho Vercel |
+| api, public | API FastAPI (`api/index.py`) và trang chat tĩnh (`public/index.html`), kèm ảnh trang PDF dẫn chứng (`public/pages`) |
 | tests, eval | kiểm thử và đo chất lượng truy xuất |
 
 ## Chạy chatbot
 
+Triển khai trên Vercel: import repo, Framework **Other** (không đổi Build Command), đặt biến môi trường `GEMINI_API_KEY`
+(khóa Gemini miễn phí tại aistudio.google.com/apikey; tùy chọn `GEMINI_MODEL`, mặc định `gemini-3.8-flash`). Không commit khóa lên git.
+`vercel.json` giới hạn thời gian chạy 60 giây và chỉ đóng gói `src/`, `data/processed/` và `public/pages/`.
+Bộ giới hạn tốc độ (`RATE_LIMIT_PER_MINUTE`, mặc định 6 lượt mỗi phút mỗi địa chỉ) nằm trong bộ nhớ của từng phiên bản hàm nên chỉ là lớp bảo vệ cơ bản.
+
+Chạy trên máy:
+
 ```
-pip install -r requirements-streamlit.txt
-streamlit run app/streamlit_app.py
+pip install -r requirements.txt uvicorn
+set GEMINI_API_KEY=khoa-cua-ban
+python -m uvicorn api.index:app --port 8000
 ```
 
-Tab "Tra số trực tiếp" dùng ngay được. Tab "Hỏi đáp" cần khóa Gemini miễn phí (aistudio.google.com/apikey):
-đặt biến môi trường `GEMINI_API_KEY` (tùy chọn `GEMINI_MODEL`, mặc định `gemini-3.8-flash`; `SESSION_LIMIT`,
-`DAILY_LIMIT` giới hạn số lượt hỏi). Không commit khóa lên git.
-
-## Triển khai trên Render
-
-Tạo **Web Service** từ repo này (hoặc dùng `render.yaml`), gói Free:
-
-| Mục | Giá trị |
-|---|---|
-| Build Command | `pip install -r requirements-streamlit.txt` |
-| Start Command | `streamlit run app/streamlit_app.py --server.port $PORT` |
-| Biến môi trường | `GEMINI_API_KEY` = khóa Gemini; `PYTHON_VERSION` = `3.10.11` |
-
-Cấu hình máy chủ (`headless`, địa chỉ 0.0.0.0) nằm trong `.streamlit/config.toml`. Gói Free của Render tự ngủ khi lâu không
-có người dùng và khởi động lại khi có yêu cầu mới; bộ đếm `DAILY_LIMIT` nằm trong bộ nhớ nên bị đặt lại mỗi lần khởi động.
-Trên Streamlit Community Cloud vẫn chạy được: đặt `GEMINI_API_KEY` trong Settings -> Secrets.
-
-## Triển khai trên Vercel
-
-Vercel không chạy được Streamlit (cần máy chủ chạy liên tục), nên có một bản riêng: API FastAPI ở `api/index.py` và trang chat tĩnh ở
-`public/index.html`. Import repo trên Vercel (Framework: Other, không cần đổi Build Command), đặt biến môi trường `GEMINI_API_KEY`.
-`vercel.json` giới hạn thời gian chạy 60 giây và chỉ đóng gói `src/` và `data/processed/`. `requirements.txt` cố ý không có streamlit để
-hàm không vượt giới hạn dung lượng. Kiểm thử cục bộ: `python tests/test_api.py` (cần `pip install httpx`).
-Bộ giới hạn tốc độ (`RATE_LIMIT_PER_MINUTE`) nằm trong bộ nhớ của từng phiên bản hàm nên chỉ là lớp bảo vệ cơ bản.
+rồi mở http://localhost:8000. Tab "Tra số trực tiếp" dùng ngay được; tab "Hỏi đáp" cần khóa Gemini.
 
 ## Kiểm thử
 
 ```
 python tests/test_tools.py
 python tests/test_agent.py
-python tests/test_app.py
-python tests/test_api.py
+python tests/test_api.py           # cần pip install httpx
 python eval/retrieval_check.py
 ```
 

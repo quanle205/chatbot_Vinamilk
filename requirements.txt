@@ -1,5 +1,4 @@
-# Thư viện chạy nền (API Vercel và các module src). Vercel cài file này nên KHÔNG có streamlit (bản cài vượt giới hạn 500 MB của hàm).
-# Giao diện Streamlit (Render, chạy cục bộ) dùng requirements-streamlit.txt. Pipeline xử lý dữ liệu dùng requirements-pipeline.txt.
+# Thư viện chạy API trên Vercel và các module src (hàm bị giới hạn 500 MB nên giữ tối thiểu). Pipeline xử lý dữ liệu dùng requirements-pipeline.txt.
 duckdb==1.5.6
 numpy>=2.0
 scikit-learn>=1.5

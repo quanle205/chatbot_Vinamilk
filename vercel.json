@@ -3,7 +3,7 @@
     "api/index.py": {
       "maxDuration": 60,
       "includeFiles": "{src/**,data/processed/**,public/pages/**}",
-      "excludeFiles": "{app/**,tests/**,eval/**,data/raw/**,data/interim/**,**/__pycache__/**,*.docx,*.pptx}"
+      "excludeFiles": "{tests/**,eval/**,data/raw/**,data/interim/**,**/__pycache__/**,*.docx,*.pptx}"
     }
   }
 }
