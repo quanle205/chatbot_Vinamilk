@@ -250,6 +250,12 @@ def test_make_client_needs_api_key():
                 os.environ[k] = v
 
 
+def test_system_prompt_lists_all_six_periods():
+    from src.agent.prompts import SYSTEM_PROMPT
+    for q in ("Q1/2025", "Q2/2025", "Q3/2025", "Q4/2025", "Q1/2026", "Q2/2026"):
+        assert q in SYSTEM_PROMPT
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted(globals().items()):
