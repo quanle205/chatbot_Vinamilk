@@ -188,15 +188,15 @@ def test_quota_or_missing_model_falls_through_but_bad_request_does_not():
         assert e.code == 503
 
 
-def test_model_is_pinned_within_one_question_but_reset_for_the_next():
+def test_model_is_pinned_within_one_question_and_failed_model_rests_for_the_next():
     script = [HttpError(503)] * 3 + [resp([call("get_metric", metric="tong tai san", period="Q1/2026")]),
                                      resp([text("Xong.")]),                               # bước 2 vẫn phải là "du-phong"
-                                     resp([text("Câu sau.")])]                           # câu sau thử lại mô hình chính trước
+                                     resp([text("Câu sau.")])]                           # mô hình chính vừa hỏng nên nghỉ vài phút, câu sau dùng dự phòng
     a = agent(script, model="chinh", fallback_models=("du-phong",), retry_delays=(0, 0))
     a.ask("q1", hist := [])
     assert [c["model"] for c in a.client.calls] == ["chinh", "chinh", "chinh", "du-phong", "du-phong"]
     a.ask("q2", hist)
-    assert a.client.calls[-1]["model"] == "chinh" and a.client.calls[-1]["n_contents"] == 3
+    assert a.client.calls[-1]["model"] == "du-phong" and a.client.calls[-1]["n_contents"] == 3
 
 
 def test_thought_parts_are_not_shown():
@@ -266,6 +266,19 @@ def test_deadline_stops_retries_and_raises():
     except TimeoutError:
         return
     raise AssertionError("đáng lẽ phải hết thời gian")
+
+
+def test_timeout_504_skips_retries_and_model_cools_down():
+    class Err(Exception):
+        code = 504
+
+    a = agent([], fallback_models=("b",), retry_delays=(0, 0))
+    ok = resp([text("ok")])
+    a.client.script = [Err("deadline"), ok, ok]
+    first = a._generate([], None)
+    assert first[0] == "b" and len(a.client.calls) == 2                    # 504: không thử lại mô hình chính, sang thẳng mô hình b
+    second = a._generate([], None)
+    assert second[0] == "b" and len(a.client.calls) == 3                   # mô hình chính đang "nghỉ", không gọi lại
 
 
 if __name__ == "__main__":

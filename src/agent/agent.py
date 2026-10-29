@@ -22,6 +22,8 @@ from .toolbox import Toolbox, result_for_model
 DEFAULT_MODEL = "gemini-3.8-flash"
 REFUSAL_TEXT = "Mình không thể trả lời câu hỏi này. Bạn có thể hỏi về số liệu và chỉ số trong BCTC hợp nhất của Vinamilk."
 TRANSIENT_CODES = {500, 503, 504}
+RETRY_CODES = {500, 503}                    # 504 = mô hình đã chờ quá lâu: thử lại chỉ tốn thêm thời gian, chuyển mô hình luôn
+COOLDOWN_S = 300                            # mô hình vừa hỏng/quá tải bị bỏ qua trong khoảng này để các câu sau không phải chờ lại
 FALLTHROUGH_CODES = TRANSIENT_CODES | {429, 403, 404}       # đổi sang mô hình dự phòng; 400 (yêu cầu sai) thì không
 DEFAULT_FALLBACKS = "gemini-3.6-flash,gemini-3.5-flash-lite"
 BLOCKED = {"SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "RECITATION", "IMAGE_SAFETY"}
@@ -90,6 +92,7 @@ class VinamilkAgent:
         self._client = client
         self.deadline_s = deadline_s        # tổng thời gian tối đa cho một câu hỏi (hàm serverless bị ngắt sau 60 giây)
         self._deadline = None
+        self._cooldown: dict[str, float] = {}
         self.retry_delays = retry_delays
         self.model = model or os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
         if fallback_models is None:
@@ -117,7 +120,9 @@ class VinamilkAgent:
         trong lượt hiện tại gắn với mô hình đã sinh ra nó.
         """
         first_error = None
-        for model in ([pinned] if pinned else self.models):
+        now = time.monotonic()
+        ready = [m for m in self.models if self._cooldown.get(m, 0) <= now] or self.models
+        for model in ([pinned] if pinned else ready):
             for delay in (*self.retry_delays, None):
                 if self._deadline is not None and time.monotonic() > self._deadline:
                     raise first_error or TimeoutError("Hết thời gian chờ mô hình")
@@ -126,10 +131,11 @@ class VinamilkAgent:
                 except Exception as e:                                     # noqa: BLE001 - lỗi khác được ném lại nguyên vẹn
                     code = getattr(e, "code", None)
                     first_error = first_error or e
-                    if code in TRANSIENT_CODES and delay is not None:
+                    if code in RETRY_CODES and delay is not None:
                         time.sleep(delay)
                         continue
                     if code in FALLTHROUGH_CODES and not pinned:
+                        self._cooldown[model] = time.monotonic() + COOLDOWN_S
                         break                                              # sang mô hình dự phòng
                     raise
         raise first_error
