@@ -3,6 +3,7 @@
 Hàm serverless không giữ trạng thái giữa các lần gọi, nên lịch sử hội thoại do trình duyệt gửi lên mỗi lượt (chỉ dạng văn bản hỏi-đáp).
 Biến môi trường: GEMINI_API_KEY (bắt buộc cho /api/ask), GEMINI_MODEL, SESSION_LIMIT_PER_MINUTE, MAX_HISTORY_TURNS.
 """
+import json
 import os
 import sys
 import time
@@ -53,7 +54,7 @@ class LookupBody(BaseModel):
 def get_agent() -> VinamilkAgent:
     global _agent
     if _agent is None:
-        _agent = VinamilkAgent(deadline_s=float(os.environ.get("ASK_DEADLINE_S", "45")))
+        _agent = VinamilkAgent(deadline_s=float(os.environ.get("ASK_DEADLINE_S", "45")), intent_filter=True)
     return _agent
 
 
@@ -67,17 +68,41 @@ def _rate_limit(request: Request) -> None:
     q.append(now)
 
 
+def _page_image(doc: str, page) -> str | None:
+    """Đường dẫn ảnh trang PDF dẫn chứng (public/pages/<doc>/<trang>.webp) nếu có."""
+    try:
+        n = int(page)
+    except (TypeError, ValueError):
+        return None
+    return f"/pages/{doc}/{n}.webp" if (ROOT / "public" / "pages" / doc / f"{n}.webp").exists() else None
+
+
+def _row_boxes(doc: str, page) -> dict:
+    """Vị trí các dòng số liệu trên ảnh trang ({mã: [x, y, rộng, cao]} theo tỷ lệ 0-1), do src/ingest/locate_rows.py tạo."""
+    try:
+        f = ROOT / "public" / "pages" / doc / f"{int(page)}.json"
+        return json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
+    except (TypeError, ValueError, OSError):
+        return {}
+
+
 def _source_links(sources: list) -> list[dict]:
-    seen, out = set(), []
+    """Gộp các dòng số liệu cùng trang thành một nguồn: tên báo cáo, trang, liên kết PDF chính thức, ảnh trang và các dòng được trích."""
+    merged: dict[tuple, dict] = {}
     for s in sources:
         key = (s.get("doc", ""), s.get("statement", ""), s.get("page"))
-        if key in seen:
-            continue
-        seen.add(key)
-        doc = key[0]
-        out.append({"doc": doc, "statement": key[1], "page": key[2],
-                    "url": OFFICIAL_PDF_URLS.get(doc, OFFICIAL_REPORTS_URL), "is_pdf": doc in OFFICIAL_PDF_URLS})
-    return out
+        item = merged.setdefault(key, {"doc": key[0], "statement": key[1], "page": key[2], "rows": [],
+                                       "url": OFFICIAL_PDF_URLS.get(key[0], OFFICIAL_REPORTS_URL), "is_pdf": key[0] in OFFICIAL_PDF_URLS,
+                                       "image": _page_image(key[0], key[2]), "boxes": []})
+        code, label = s.get("code"), s.get("label")
+        if code and code != "-":
+            row = f"mã {code}: {label}" if label else f"mã {code}"
+            if row not in item["rows"]:
+                item["rows"].append(row)
+                box = _row_boxes(key[0], key[2]).get(str(code))
+                if box:
+                    item["boxes"].append(box)
+    return list(merged.values())
 
 
 @app.get("/api/health")

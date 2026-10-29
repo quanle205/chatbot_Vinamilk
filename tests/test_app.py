@@ -59,16 +59,17 @@ def test_chat_with_agent_shows_answer_sources_and_warning():
     assert "Nguồn tham khảo" in body
     assert "Mở PDF" in body
     assert "Công cụ đã dùng" not in body
+    assert any("Xem trang PDF dẫn chứng: q1-2026 · trang 11" in e.label for e in at.expander)       # ảnh trang PDF làm dẫn chứng
 
 
 def test_session_limit_and_api_errors_are_handled():
     class RateLimit(Exception):
         code = 429
     at = fresh([RateLimit("quota")] * 5, GEMINI_API_KEY="demo", SESSION_LIMIT="2")   # chính + 2 dự phòng đều hết hạn mức
-    at.chat_input[0].set_value("câu 1").run()
+    at.chat_input[0].set_value("Doanh thu Q1/2026?").run()
     assert not at.exception and "tạm hết lượt sử dụng" in all_text(at) and "quota" not in all_text(at)
     at.session_state["asked"] = 2
-    at.chat_input[0].set_value("câu 2").run()
+    at.chat_input[0].set_value("Tổng tài sản Q2/2026?").run()
     assert "hết 2 lượt hỏi" in all_text(at)
 
 

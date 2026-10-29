@@ -14,6 +14,8 @@ tăng trưởng, tìm nội dung thuyết minh. Số liệu lấy từ PDF bằn
 | src/tools | tra số, tỷ số, tăng trưởng, máy tính (`TOOL_SPECS`, `call_tool`) |
 | src/agent | agent Gemini function-calling gọi công cụ + retriever; kiểm tra số bám nguồn (`guard.py`) |
 | app | giao diện Streamlit |
+| src/train | huấn luyện: bộ phân loại ý định câu hỏi (`train_intent.py`) và tìm lưới tham số truy xuất (`tune_retrieval.py`) |
+| api, public | API FastAPI và trang chat tĩnh cho Vercel |
 | tests, eval | kiểm thử và đo chất lượng truy xuất |
 
 ## Chạy chatbot
@@ -61,6 +63,16 @@ python eval/retrieval_check.py
 
 Các test không gọi mạng (Gemini được thay bằng client giả); chất lượng câu trả lời thật chưa được đo.
 
+## Huấn luyện và đo
+
+```
+python -m src.train.train_intent       # phân loại ý định: train 1.044 / test 390 câu, độ chính xác ~0,80, quét ngưỡng từ chối
+python -m src.train.tune_retrieval     # tìm lưới k1, b, trọng số vector trên 210 câu train / 90 câu test (~4 phút)
+```
+
+Bộ phân loại huấn luyện lại dưới 1 giây mỗi lần khởi động ứng dụng (không lưu tệp mô hình) và chỉ dùng để từ chối sớm câu ngoài phạm vi (ngưỡng 0,8).
+Tham số BM25 hiện dùng (k1 = 0,9; b = 0,5; trọng số vector 0) là kết quả của bước tìm lưới.
+
 ## Chạy lại pipeline dữ liệu
 
 ```
@@ -70,4 +82,6 @@ python src/ingest/parse_statements.py --pages-dir data/interim --output data/int
 python src/ingest/repair_identities.py --parse-dir src/ingest --csv data/interim/statements_long.csv --out data/interim --overrides data/processed/overrides.csv
 python src/ingest/build_db.py
 python -m src.rag.chunking
+python src/ingest/render_pages.py   # ảnh các trang PDF được trích dẫn -> public/pages (dẫn chứng bên cạnh câu trả lời)
+python src/ingest/locate_rows.py    # vị trí từng dòng số liệu trên ảnh trang (khung đỏ đánh dấu dòng được trích)
 ```

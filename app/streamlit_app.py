@@ -4,6 +4,7 @@ Cấu hình qua biến môi trường hoặc Streamlit Secrets: GEMINI_API_KEY, 
 Giới hạn lượt hỏi cho bản public: SESSION_LIMIT (lượt/phiên, mặc định 15) và DAILY_LIMIT (lượt/ngày toàn dịch vụ, mặc định 300).
 """
 import datetime
+import json
 import logging
 import os
 import sys
@@ -24,6 +25,7 @@ EXAMPLES = ["Doanh thu thuần quý 1/2026 là bao nhiêu và tăng bao nhiêu s
             "ROE 6 tháng đầu năm 2026 là bao nhiêu?",
             "Dòng tiền từ hoạt động kinh doanh quý 4/2025?"]
 OFFICIAL_REPORTS_URL = "https://www.vinamilk.com.vn/investor/reports/financial"
+PAGES_DIR = Path(__file__).resolve().parents[1] / "public" / "pages"     # ảnh trang PDF dẫn chứng (src/ingest/render_pages.py)
 OFFICIAL_PDF_URLS = {
     "q1-2026": "https://d8um25gjecm9v.cloudfront.net/cms/20260429_VNM_BCTC_DA_SOAT_XET_Q1_2026_HOP_NHAT_VN_d44326741a.pdf",
     "q2-2026": "https://d8um25gjecm9v.cloudfront.net/cms/20260730_VNM_BCTC_da_soat_xet_Q2_2026_Hop_nhat_76ef2e29c1.pdf",
@@ -67,7 +69,7 @@ def take_daily_slot() -> bool:
 
 @st.cache_resource
 def get_agent() -> VinamilkAgent:
-    return VinamilkAgent()
+    return VinamilkAgent(intent_filter=True)
 
 
 def friendly_error(e: Exception) -> str:
@@ -83,6 +85,20 @@ def friendly_error(e: Exception) -> str:
     if code == 404:
         return "Trợ lý hiện chưa sẵn sàng. Bạn thử lại sau hoặc dùng Tra số trực tiếp nhé."
     return "Đã có sự cố khi xử lý yêu cầu. Bạn thử lại sau nhé."
+
+
+@st.cache_data(show_spinner=False)
+def page_with_highlights(path: str, boxes: tuple):
+    """Ảnh trang PDF với khung đỏ quanh các dòng được trích (boxes: tỷ lệ x, y, rộng, cao)."""
+    from PIL import Image, ImageDraw
+    img = Image.open(path).convert("RGB")
+    over = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(over)
+    W, H = img.size
+    for x, y, w, h in boxes:
+        rect = [x * W, y * H, (x + w) * W, (y + h) * H]
+        d.rectangle(rect, fill=(225, 29, 72, 35), outline=(225, 29, 72, 255), width=3)
+    return Image.alpha_composite(img.convert("RGBA"), over).convert("RGB")
 
 
 def render_meta(m: dict):
@@ -106,6 +122,21 @@ def render_meta(m: dict):
             url = url or OFFICIAL_PDF_URLS.get(doc) or OFFICIAL_REPORTS_URL
             link_label = "Mở PDF" if doc in OFFICIAL_PDF_URLS else "Mở trang báo cáo Vinamilk"
             st.markdown(f"- {citation} · [{link_label}]({url})")
+        shown = set()
+        for source in m.get("sources", []):
+            doc, page = source.get("doc"), source.get("page")
+            try:
+                img = PAGES_DIR / str(doc) / f"{int(page)}.webp"
+            except (TypeError, ValueError):
+                continue
+            if img.exists() and img not in shown:
+                shown.add(img)
+                rows = [f"mã {x['code']}" for x in m["sources"] if x.get("doc") == doc and x.get("page") == page and x.get("code") not in (None, "-")]
+                with st.expander(f"Xem trang PDF dẫn chứng: {doc} · trang {int(page)}" + (f" ({', '.join(rows)})" if rows else "")):
+                    codes = [x.get("code") for x in m["sources"] if x.get("doc") == doc and x.get("page") == page and x.get("code") not in (None, "-")]
+                    row_boxes = json.loads(img.with_suffix(".json").read_text(encoding="utf-8")) if img.with_suffix(".json").exists() else {}
+                    boxes = tuple(tuple(row_boxes[str(c)]) for c in dict.fromkeys(codes) if str(c) in row_boxes)
+                    st.image(page_with_highlights(str(img), boxes) if boxes else str(img), use_container_width=True)
 
 
 def chat_tab():

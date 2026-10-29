@@ -10,7 +10,7 @@ from .text import tokenize
 
 
 class BM25:
-    def __init__(self, texts: list[str], k1: float = 1.5, b: float = 0.75):
+    def __init__(self, texts: list[str], k1: float = 0.9, b: float = 0.5):
         self.k1, self.b = k1, b
         docs = [tokenize(t) for t in texts]
         self.n = len(docs)

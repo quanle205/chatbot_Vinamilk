@@ -33,14 +33,28 @@ class HybridRetriever:
     def __init__(self, chunks: list[dict]):
         self.chunks = chunks
         texts = [c["text"] for c in chunks]
-        self.bm25 = BM25(texts)
-        self.embedder = NgramEmbedder().fit(texts)
-        # Đã đo (eval/retrieval_check.py, 14 câu từ khóa + 10 câu đồng nghĩa): nhánh vector kém BM25 và
-        # trọng số bằng BM25 làm hybrid tụt hạng (MRR 0,57-0,77 so với 0,84), nên giữ trọng số thấp.
-        self.vector_weight = 0.15
-        self.doc_vecs = self.embedder.encode_docs(texts)
+        self.bm25 = BM25(texts)                                  # k1 = 0,9; b = 0,5: chọn bằng tìm lưới (src/train/tune_retrieval.py)
+        # Trọng số vector = 0: tìm lưới trên 210 câu train / 90 câu test (tách theo chỉ tiêu) cho BM25 đứng riêng là tốt nhất
+        # (test Hit@6 0,90, MRR 0,72 so với 0,67 và 0,40 của cấu hình cũ 1,5; 0,75; 0,15). Nhánh vector vẫn dùng được qua
+        # `weights={"vector": w}` hoặc mode="vector" để so sánh; được dựng muộn nên khởi động nhanh hơn.
+        self.vector_weight = 0.0
+        self._texts = texts
+        self._embedder = None
+        self._doc_vecs = None
         self.docs = np.array([c["doc"] for c in chunks])
         self.kinds = np.array([c["kind"] for c in chunks])
+
+    @property
+    def embedder(self) -> NgramEmbedder:
+        if self._embedder is None:
+            self._embedder = NgramEmbedder().fit(self._texts)
+        return self._embedder
+
+    @property
+    def doc_vecs(self):
+        if self._doc_vecs is None:
+            self._doc_vecs = self.embedder.encode_docs(self._texts)
+        return self._doc_vecs
 
     @staticmethod
     def from_jsonl(path: str | Path) -> "HybridRetriever":
@@ -67,11 +81,13 @@ class HybridRetriever:
     def search(self, query: str, k: int = 6, docs: set[str] | None = None, mode: str = "hybrid",
                weights: dict | None = None) -> list[Hit]:
         w = {"bm25": 1.0, "vector": self.vector_weight, **(weights or {})}
+        if mode == "vector" and w["vector"] <= 0:
+            w["vector"] = 1.0                                            # chỉ nhánh vector: trọng số mặc định 0 không được làm mất thứ hạng
         mask = self._allowed(query, docs)
         rankings: dict[str, list[int]] = {}
         if mode in ("hybrid", "bm25"):
             rankings["bm25"] = self._rank(self.bm25.scores(query), mask, CANDIDATES)
-        if mode in ("hybrid", "vector"):
+        if mode == "vector" or (mode == "hybrid" and w["vector"] > 0):
             rankings["vector"] = self._rank(similarity(self.doc_vecs, self.embedder.encode_query(query)), mask, CANDIDATES)
 
         fused: dict[int, float] = {}

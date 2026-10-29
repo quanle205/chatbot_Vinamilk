@@ -24,6 +24,11 @@
   .msg.err { background:var(--warn); color:var(--warn-ink); }
   .src { margin-top:8px; font-size:14px; color:var(--mute); white-space:normal; }
   .src ul { margin:4px 0 0 18px; padding:0; }
+  .src li { margin-bottom:8px; }
+  .src summary { cursor:pointer; color:var(--accent); }
+  .src a.pg { position:relative; display:block; }
+  .src .hl { position:absolute; border:2px solid #e11d48; background:rgba(225,29,72,.12); border-radius:3px; pointer-events:none; }
+  .src img { display:block; max-width:100%; margin-top:6px; border:1px solid var(--line); border-radius:8px; background:#fff; }
   .warn { margin-top:8px; padding:8px 10px; border-radius:8px; background:var(--warn); color:var(--warn-ink); font-size:14px; white-space:normal; }
   form { display:flex; gap:8px; }
   input, select { font:inherit; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink); }
@@ -107,7 +112,10 @@ function sourcesHtml(list) {
   const items = list.map(s => {
     const label = s.is_pdf ? "Mở PDF" : "Mở trang báo cáo Vinamilk";
     const page = s.page != null ? s.page : "không rõ";
-    return `<li>${esc(s.doc)} · ${esc(s.statement || "")} · trang PDF ${esc(String(page))} · <a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${label}</a></li>`;
+    const rows = (s.rows && s.rows.length) ? `<div>${esc(s.rows.join("; "))}</div>` : "";
+    const boxes = (s.boxes || []).map(b => `<span class="hl" style="left:${b[0] * 100}%;top:${b[1] * 100}%;width:${b[2] * 100}%;height:${b[3] * 100}%"></span>`).join("");
+    const img = s.image ? `<details><summary>Xem trang PDF dẫn chứng</summary><a class="pg" href="${esc(s.image)}" target="_blank" rel="noopener noreferrer"><img src="${esc(s.image)}" loading="lazy" alt="Trang ${esc(String(page))} của ${esc(s.doc)}">${boxes}</a></details>` : "";
+    return `<li>${esc(s.doc)} · ${esc(s.statement || "")} · trang PDF ${esc(String(page))} · <a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${label}</a>${rows}${img}</li>`;
   }).join("");
   return `<div class="src"><strong>Nguồn tham khảo</strong><ul>${items}</ul></div>`;
 }

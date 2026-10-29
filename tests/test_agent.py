@@ -281,6 +281,28 @@ def test_timeout_504_skips_retries_and_model_cools_down():
     assert second[0] == "b" and len(a.client.calls) == 3                   # mô hình chính đang "nghỉ", không gọi lại
 
 
+def test_intent_filter_refuses_out_of_scope_without_calling_gemini():
+    a = agent([], intent_filter=True)
+    r = a.ask("Giá cổ phiếu VNM hôm nay là bao nhiêu?", hist := [])
+    assert r.stop_reason == "OUT_OF_SCOPE" and r.answer == REFUSAL_TEXT and a.client.calls == []
+    assert len(hist) == 2                                                      # lịch sử vẫn có câu hỏi và câu từ chối
+
+
+def test_intent_filter_lets_real_questions_through():
+    for q in ("Doanh thu thuần Q1/2026 là bao nhiêu?", "bao cao tai chinh quy 3 2025", "ROE 6 tháng đầu năm 2026 là bao nhiêu?",
+              "Chi phí lãi vay trong thuyết minh", "Lợi nhuận gộp quý 2/2026 so với quý 2/2025?"):
+        a = agent([resp([text("ok")])], intent_filter=True)
+        assert a.ask(q).stop_reason != "OUT_OF_SCOPE", q
+
+
+def test_intent_dataset_has_no_metric_or_template_leak():
+    from src.train.dataset import TRA_SO_TEST, TRA_SO_TRAIN, build
+    d = build()
+    assert not set(TRA_SO_TRAIN) & set(TRA_SO_TEST)
+    assert {l for _, l in d["train"]} == {l for _, l in d["test"]} == {"tra_so", "ty_so", "so_sanh", "thuyet_minh", "ngoai_pham_vi"}
+    assert not {q for q, _ in d["train"]} & {q for q, _ in d["test"]}              # không câu nào xuất hiện ở cả hai tập
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted(globals().items()):

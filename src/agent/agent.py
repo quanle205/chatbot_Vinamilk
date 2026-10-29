@@ -88,8 +88,9 @@ class AgentResult:
 class VinamilkAgent:
     def __init__(self, client=None, model: str | None = None, toolbox: Toolbox | None = None,
                  max_steps: int = 8, max_tokens: int = 8192, retry_delays: tuple = (1.5, 3.0),
-                 fallback_models: tuple | None = None, deadline_s: float | None = None):
+                 fallback_models: tuple | None = None, deadline_s: float | None = None, intent_filter: bool = False):
         self._client = client
+        self.intent_filter = intent_filter  # True: từ chối sớm câu ngoài phạm vi bằng bộ phân loại đã huấn luyện (src/train), không tốn lượt Gemini
         self.deadline_s = deadline_s        # tổng thời gian tối đa cho một câu hỏi (hàm serverless bị ngắt sau 60 giây)
         self._deadline = None
         self._cooldown: dict[str, float] = {}
@@ -140,6 +141,11 @@ class VinamilkAgent:
                     raise
         raise first_error
 
+    @staticmethod
+    def _out_of_scope(question: str) -> bool:
+        from ..train.intent import get_classifier               # nạp muộn: scikit-learn chỉ cần khi bật bộ lọc
+        return get_classifier().is_out_of_scope(question)
+
     def ask(self, question: str, history: list | None = None) -> AgentResult:
         """Hỏi một câu. `history` là lịch sử hội thoại (được nối thêm tại chỗ); None = hội thoại mới.
 
@@ -149,6 +155,10 @@ class VinamilkAgent:
         """
         self._deadline = time.monotonic() + self.deadline_s if self.deadline_s else None
         contents = history if history is not None else []
+        if self.intent_filter and self._out_of_scope(question):
+            contents.append(types.Content(role="user", parts=[types.Part(text=question)]))
+            contents.append(types.Content(role="model", parts=[types.Part(text=REFUSAL_TEXT)]))
+            return AgentResult(answer=REFUSAL_TEXT, stop_reason="OUT_OF_SCOPE", model="intent-classifier")
         start = len(contents)
         contents.append(types.Content(role="user", parts=[types.Part(text=question)]))
         res = AgentResult(answer="")
