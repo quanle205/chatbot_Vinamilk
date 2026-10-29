@@ -2,7 +2,7 @@
   "functions": {
     "api/index.py": {
       "maxDuration": 60,
-      "includeFiles": "{src/**,data/processed/**}",
+      "includeFiles": "{src/**,data/processed/**,public/pages/**}",
       "excludeFiles": "{app/**,tests/**,eval/**,data/raw/**,data/interim/**,**/__pycache__/**,*.docx,*.pptx}"
     }
   }
