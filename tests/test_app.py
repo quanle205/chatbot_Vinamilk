@@ -21,6 +21,8 @@ def fresh(script=None, **env):
     st.cache_resource.clear()
     for k in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "SESSION_LIMIT", "DAILY_LIMIT"):
         os.environ.pop(k, None)
+    for k in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
+        os.environ[k] = ""                                   # rỗng (không phải thiếu): app không nạp khóa thật từ .streamlit/secrets.toml
     os.environ.update(env)
     agent_mod.make_client = (lambda: FakeClient(script)) if script is not None else ORIGINAL_MAKE_CLIENT
     return AppTest.from_file(APP, default_timeout=60).run()

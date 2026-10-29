@@ -5,7 +5,7 @@ services:
     runtime: python
     plan: free
     branch: main
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements-streamlit.txt
     startCommand: streamlit run app/streamlit_app.py --server.port $PORT
     healthCheckPath: /_stcore/health
     envVars:

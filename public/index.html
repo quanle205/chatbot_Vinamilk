@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chatbot BCTC Vinamilk</title>
+<style>
+  :root { --bg:#f7f8fa; --card:#fff; --ink:#1b2a38; --mute:#5b6b7a; --line:#dde3ea; --accent:#0b3c5d; --accent-ink:#fff; --user:#e8f0f7; --warn:#fff4e5; --warn-ink:#7a4a00; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f1720; --card:#16212d; --ink:#e6edf3; --mute:#93a4b5; --line:#2a3947; --accent:#5aa6d6; --accent-ink:#0b1620; --user:#1d2f40; --warn:#3a2c10; --warn-ink:#ffd58a; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 system-ui, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width:860px; margin:0 auto; padding:16px; }
+  h1 { font-size:22px; margin:8px 0 4px; }
+  p.sub { margin:0 0 16px; color:var(--mute); font-size:14px; }
+  .tabs { display:flex; gap:8px; margin-bottom:12px; }
+  .tab { padding:8px 14px; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:8px; cursor:pointer; font:inherit; }
+  .tab[aria-selected="true"] { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+  .panel[hidden] { display:none; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  .chip { padding:6px 10px; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:16px; cursor:pointer; font-size:14px; text-align:left; }
+  #log { display:flex; flex-direction:column; gap:10px; min-height:120px; margin-bottom:12px; }
+  .msg { padding:10px 14px; border-radius:12px; border:1px solid var(--line); background:var(--card); white-space:pre-wrap; word-wrap:break-word; }
+  .msg.user { background:var(--user); align-self:flex-end; max-width:85%; }
+  .msg.err { background:var(--warn); color:var(--warn-ink); }
+  .src { margin-top:8px; font-size:14px; color:var(--mute); white-space:normal; }
+  .src ul { margin:4px 0 0 18px; padding:0; }
+  .warn { margin-top:8px; padding:8px 10px; border-radius:8px; background:var(--warn); color:var(--warn-ink); font-size:14px; white-space:normal; }
+  form { display:flex; gap:8px; }
+  input, select { font:inherit; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink); }
+  input[type=text] { flex:1; min-width:0; }
+  button.go { padding:10px 16px; border:0; border-radius:8px; background:var(--accent); color:var(--accent-ink); font:inherit; cursor:pointer; }
+  button.go:disabled { opacity:.5; cursor:default; }
+  button.link { background:none; border:0; color:var(--mute); cursor:pointer; font:inherit; padding:0; text-decoration:underline; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  #lookup-out { padding:12px 14px; border:1px solid var(--line); border-radius:12px; background:var(--card); white-space:pre-wrap; }
+  a { color:var(--accent); }
+  footer { margin-top:20px; font-size:13px; color:var(--mute); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Chatbot BCTC Vinamilk</h1>
+  <p class="sub">Hỏi đáp trên báo cáo tài chính hợp nhất quý 1/2025 – quý 2/2026. Số liệu lấy từ PDF bằng OCR và đã đối chiếu; câu trả lời kèm nguồn.</p>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="t-chat" aria-selected="true" aria-controls="p-chat">Hỏi đáp</button>
+    <button class="tab" role="tab" id="t-lookup" aria-selected="false" aria-controls="p-lookup">Tra số trực tiếp</button>
+  </div>
+
+  <section class="panel" id="p-chat" role="tabpanel" aria-labelledby="t-chat">
+    <div class="chips" id="chips"></div>
+    <div id="log" aria-live="polite"></div>
+    <form id="chat-form">
+      <input type="text" id="q" maxlength="500" placeholder="Hỏi về số liệu, tỷ số hoặc nội dung thuyết minh…" aria-label="Câu hỏi" autocomplete="off">
+      <button class="go" id="send" type="submit">Gửi</button>
+    </form>
+    <p style="margin:8px 0 0"><button class="link" id="reset" type="button">Cuộc trò chuyện mới</button></p>
+  </section>
+
+  <section class="panel" id="p-lookup" role="tabpanel" aria-labelledby="t-lookup" hidden>
+    <form id="lookup-form" class="row">
+      <input type="text" id="metric" value="doanh thu thuần" aria-label="Chỉ tiêu" list="metric-list">
+      <datalist id="metric-list">
+        <option value="doanh thu thuần"><option value="giá vốn hàng bán"><option value="lợi nhuận gộp"><option value="lợi nhuận sau thuế">
+        <option value="tổng tài sản"><option value="nợ phải trả"><option value="vốn chủ sở hữu"><option value="hàng tồn kho">
+      </datalist>
+      <select id="period" aria-label="Kỳ báo cáo">
+        <option>Q1/2025</option><option>Q2/2025</option><option>Q3/2025</option><option>Q4/2025</option><option>Q1/2026</option><option selected>Q2/2026</option>
+      </select>
+      <select id="basis" aria-label="Cách tính">
+        <option value="quy" selected>Riêng quý</option><option value="luy_ke">Lũy kế từ đầu năm</option>
+      </select>
+      <button class="go" type="submit">Tra số</button>
+    </form>
+    <div id="lookup-out">Chọn chỉ tiêu và kỳ rồi bấm Tra số.</div>
+  </section>
+
+  <footer>Chỉ cung cấp thông tin từ báo cáo tài chính, không phải khuyến nghị đầu tư.</footer>
+</div>
+
+<script>
+const EXAMPLES = [
+  "Doanh thu thuần quý 1/2026 là bao nhiêu và tăng bao nhiêu so với cùng kỳ?",
+  "Biên lợi nhuận gộp quý 2/2026 so với quý 2/2025?",
+  "Tổng tài sản và nợ phải trả tại 30/6/2026?",
+  "ROE 6 tháng đầu năm 2026 là bao nhiêu?",
+  "Dòng tiền từ hoạt động kinh doanh quý 4/2025?"
+];
+const $ = id => document.getElementById(id);
+let history = [];          // [{role: "user"|"model", text}]
+let busy = false;
+
+function esc(s) { return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function fmt(text) {       // văn bản đã escape; chỉ hỗ trợ **đậm** và gạch đầu dòng
+  return esc(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+}
+function add(cls, html) {
+  const d = document.createElement("div");
+  d.className = "msg " + cls;
+  d.innerHTML = html;
+  $("log").appendChild(d);
+  d.scrollIntoView({ block: "end" });
+  return d;
+}
+function sourcesHtml(list) {
+  if (!list || !list.length) return "";
+  const items = list.map(s => {
+    const label = s.is_pdf ? "Mở PDF" : "Mở trang báo cáo Vinamilk";
+    const page = s.page != null ? s.page : "không rõ";
+    return `<li>${esc(s.doc)} · ${esc(s.statement || "")} · trang PDF ${esc(String(page))} · <a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${label}</a></li>`;
+  }).join("");
+  return `<div class="src"><strong>Nguồn tham khảo</strong><ul>${items}</ul></div>`;
+}
+
+async function ask(question) {
+  if (busy || !question.trim()) return;
+  busy = true; $("send").disabled = true;
+  add("user", esc(question));
+  const wait = add("", "Đang tra cứu…");
+  try {
+    const r = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, history }) });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || "Đã có sự cố khi xử lý yêu cầu. Bạn thử lại sau nhé.");
+    let html = fmt(data.answer);
+    if (data.unsupported_numbers && data.unsupported_numbers.length)
+      html += `<div class="warn">Các số sau trong câu trả lời <strong>không khớp</strong> kết quả tra cứu, hãy kiểm tra lại: ${esc(data.unsupported_numbers.join(", "))}</div>`;
+    (data.warnings || []).forEach(w => { html += `<div class="warn">${esc(w)}</div>`; });
+    html += sourcesHtml(data.sources);
+    wait.innerHTML = html;
+    history.push({ role: "user", text: question }, { role: "model", text: data.answer });
+    history = history.slice(-12);
+  } catch (e) {
+    wait.className = "msg err";
+    wait.textContent = e.message;
+  } finally { busy = false; $("send").disabled = false; }
+}
+
+EXAMPLES.forEach(q => {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "chip"; b.textContent = q;
+  b.onclick = () => ask(q);
+  $("chips").appendChild(b);
+});
+$("chat-form").onsubmit = e => { e.preventDefault(); const q = $("q").value; $("q").value = ""; ask(q); };
+$("reset").onclick = () => { history = []; $("log").innerHTML = ""; };
+
+$("lookup-form").onsubmit = async e => {
+  e.preventDefault();
+  $("lookup-out").textContent = "Đang tra…";
+  try {
+    const r = await fetch("/api/lookup", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ metric: $("metric").value, period: $("period").value, basis: $("basis").value }) });
+    const data = await r.json().catch(() => ({}));
+    $("lookup-out").textContent = r.ok ? data.text : (data.detail || "Không tra được, thử lại sau.");
+  } catch (_) { $("lookup-out").textContent = "Không tra được, thử lại sau."; }
+};
+
+function pick(which) {
+  for (const k of ["chat", "lookup"]) {
+    $("t-" + k).setAttribute("aria-selected", String(k === which));
+    $("p-" + k).hidden = k !== which;
+  }
+}
+$("t-chat").onclick = () => pick("chat");
+$("t-lookup").onclick = () => pick("lookup");
+</script>
+</body>
+</html>

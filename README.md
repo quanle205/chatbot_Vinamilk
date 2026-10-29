@@ -19,7 +19,7 @@ tăng trưởng, tìm nội dung thuyết minh. Số liệu lấy từ PDF bằn
 ## Chạy chatbot
 
 ```
-pip install -r requirements.txt
+pip install -r requirements-streamlit.txt
 streamlit run app/streamlit_app.py
 ```
 
@@ -33,7 +33,7 @@ Tạo **Web Service** từ repo này (hoặc dùng `render.yaml`), gói Free:
 
 | Mục | Giá trị |
 |---|---|
-| Build Command | `pip install -r requirements.txt` |
+| Build Command | `pip install -r requirements-streamlit.txt` |
 | Start Command | `streamlit run app/streamlit_app.py --server.port $PORT` |
 | Biến môi trường | `GEMINI_API_KEY` = khóa Gemini; `PYTHON_VERSION` = `3.10.11` |
 
@@ -41,12 +41,21 @@ Cấu hình máy chủ (`headless`, địa chỉ 0.0.0.0) nằm trong `.streamli
 có người dùng và khởi động lại khi có yêu cầu mới; bộ đếm `DAILY_LIMIT` nằm trong bộ nhớ nên bị đặt lại mỗi lần khởi động.
 Trên Streamlit Community Cloud vẫn chạy được: đặt `GEMINI_API_KEY` trong Settings -> Secrets.
 
+## Triển khai trên Vercel
+
+Vercel không chạy được Streamlit (cần máy chủ chạy liên tục), nên có một bản riêng: API FastAPI ở `api/index.py` và trang chat tĩnh ở
+`public/index.html`. Import repo trên Vercel (Framework: Other, không cần đổi Build Command), đặt biến môi trường `GEMINI_API_KEY`.
+`vercel.json` giới hạn thời gian chạy 60 giây và chỉ đóng gói `src/` và `data/processed/`. `requirements.txt` cố ý không có streamlit để
+hàm không vượt giới hạn dung lượng. Kiểm thử cục bộ: `python tests/test_api.py` (cần `pip install httpx`).
+Bộ giới hạn tốc độ (`RATE_LIMIT_PER_MINUTE`) nằm trong bộ nhớ của từng phiên bản hàm nên chỉ là lớp bảo vệ cơ bản.
+
 ## Kiểm thử
 
 ```
 python tests/test_tools.py
 python tests/test_agent.py
 python tests/test_app.py
+python tests/test_api.py
 python eval/retrieval_check.py
 ```
 
