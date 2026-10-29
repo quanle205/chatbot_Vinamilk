@@ -25,13 +25,21 @@ streamlit run app/streamlit_app.py
 
 Tab "Tra số trực tiếp" dùng ngay được. Tab "Hỏi đáp" cần khóa Gemini miễn phí (aistudio.google.com/apikey):
 đặt biến môi trường `GEMINI_API_KEY` (tùy chọn `GEMINI_MODEL`, mặc định `gemini-3.8-flash`; `SESSION_LIMIT`,
-`DAILY_LIMIT` giới hạn số lượt hỏi). Trên Streamlit Community Cloud, đặt trong Settings -> Secrets:
+`DAILY_LIMIT` giới hạn số lượt hỏi). Không commit khóa lên git.
 
-```
-GEMINI_API_KEY = "khoa-cua-ban"
-```
+## Triển khai trên Render
 
-Không commit khóa lên git.
+Tạo **Web Service** từ repo này (hoặc dùng `render.yaml`), gói Free:
+
+| Mục | Giá trị |
+|---|---|
+| Build Command | `pip install -r requirements.txt` |
+| Start Command | `streamlit run app/streamlit_app.py --server.port $PORT` |
+| Biến môi trường | `GEMINI_API_KEY` = khóa Gemini; `PYTHON_VERSION` = `3.10.11` |
+
+Cấu hình máy chủ (`headless`, địa chỉ 0.0.0.0) nằm trong `.streamlit/config.toml`. Gói Free của Render tự ngủ khi lâu không
+có người dùng và khởi động lại khi có yêu cầu mới; bộ đếm `DAILY_LIMIT` nằm trong bộ nhớ nên bị đặt lại mỗi lần khởi động.
+Trên Streamlit Community Cloud vẫn chạy được: đặt `GEMINI_API_KEY` trong Settings -> Secrets.
 
 ## Kiểm thử
 

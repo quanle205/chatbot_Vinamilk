@@ -28,7 +28,7 @@ st.set_page_config(page_title="Chatbot BCTC Vinamilk", page_icon="📊", layout=
 
 
 def load_secrets_into_env():
-    """Streamlit Community Cloud: đưa cấu hình trong Settings -> Secrets vào biến môi trường (nếu có)."""
+    """Streamlit Cloud: đưa cấu hình trong Settings -> Secrets vào biến môi trường (nếu có). Trên Render dùng sẵn biến môi trường."""
     try:
         secrets = dict(st.secrets)
     except Exception:                                                        # noqa: BLE001 - chạy local, không có file secrets
