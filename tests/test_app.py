@@ -34,6 +34,7 @@ def all_text(at):
 def test_loads_and_lookup_tab_works_without_llm():
     at = fresh()
     assert not at.exception and len(at.tabs) == 2
+    assert sum(button.key == "new_conversation" for button in at.button) == 1
     assert at.success and "Doanh thu thuần quý 2/2026: 18.847.347.464.988" in at.success[0].value   # mặc định, tra trực tiếp
 
 
@@ -41,7 +42,8 @@ def test_chat_without_key_shows_friendly_message():
     at = fresh()
     at.chat_input[0].set_value("Doanh thu Q1/2026?").run()
     assert not at.exception
-    assert "chưa cấu hình khóa Gemini" in all_text(at) and "GEMINI_API_KEY" in all_text(at)
+    assert "Trợ lý chưa sẵn sàng" in all_text(at)
+    assert "GEMINI_API_KEY" not in all_text(at)
 
 
 def test_chat_with_agent_shows_answer_sources_and_warning():
@@ -52,7 +54,9 @@ def test_chat_with_agent_shows_answer_sources_and_warning():
     assert not at.exception
     body = all_text(at)
     assert "16.148,7 tỷ đồng" in body and "không khớp" in body and "99.999" in body       # số bịa bị cảnh báo
-    assert any("Công cụ đã dùng" in e.label for e in at.expander)
+    assert "Nguồn tham khảo" in body
+    assert "Mở PDF" in body
+    assert "Công cụ đã dùng" not in body
 
 
 def test_session_limit_and_api_errors_are_handled():
@@ -60,20 +64,21 @@ def test_session_limit_and_api_errors_are_handled():
         code = 429
     at = fresh([RateLimit("quota")] * 5, GEMINI_API_KEY="demo", SESSION_LIMIT="2")   # chính + 2 dự phòng đều hết hạn mức
     at.chat_input[0].set_value("câu 1").run()
-    assert not at.exception and "hết hạn mức miễn phí" in all_text(at) and "quota" not in all_text(at)
+    assert not at.exception and "tạm hết lượt sử dụng" in all_text(at) and "quota" not in all_text(at)
     at.session_state["asked"] = 2
     at.chat_input[0].set_value("câu 2").run()
     assert "hết 2 lượt hỏi" in all_text(at)
 
 
-def test_server_error_shows_code_and_message_but_retries_first():
+def test_server_error_shows_friendly_message_without_technical_details():
     class Overloaded(Exception):
         code, status, message = 503, "UNAVAILABLE", "The model is overloaded. Please try again later."
     agent_mod.time.sleep = lambda s: None                                     # không chờ thật giữa các lần thử
     at = fresh([Overloaded()] * 20, GEMINI_API_KEY="demo")                    # mọi mô hình (chính + dự phòng) đều bận
     at.chat_input[0].set_value("câu hỏi").run()
     body = all_text(at)
-    assert not at.exception and "quá tải" in body and "503 UNAVAILABLE" in body and "overloaded" in body
+    assert not at.exception and "đang bận" in body
+    assert "503" not in body and "UNAVAILABLE" not in body and "overloaded" not in body
 
 
 if __name__ == "__main__":

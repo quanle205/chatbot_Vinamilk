@@ -23,6 +23,11 @@ EXAMPLES = ["Doanh thu thuần quý 1/2026 là bao nhiêu và tăng bao nhiêu s
             "Tổng tài sản và nợ phải trả tại 30/6/2026?",
             "ROE 6 tháng đầu năm 2026 là bao nhiêu?",
             "Dòng tiền từ hoạt động kinh doanh quý 4/2025?"]
+OFFICIAL_REPORTS_URL = "https://www.vinamilk.com.vn/investor/reports/financial"
+OFFICIAL_PDF_URLS = {
+    "q1-2026": "https://d8um25gjecm9v.cloudfront.net/cms/20260429_VNM_BCTC_DA_SOAT_XET_Q1_2026_HOP_NHAT_VN_d44326741a.pdf",
+    "q2-2026": "https://d8um25gjecm9v.cloudfront.net/cms/20260730_VNM_BCTC_da_soat_xet_Q2_2026_Hop_nhat_76ef2e29c1.pdf",
+}
 
 st.set_page_config(page_title="Chatbot BCTC Vinamilk", page_icon="📊", layout="wide")
 
@@ -66,39 +71,41 @@ def get_agent() -> VinamilkAgent:
 
 
 def friendly_error(e: Exception) -> str:
-    """Thông báo dễ hiểu cho lỗi gọi Gemini; không đưa chi tiết kỹ thuật hay khóa ra giao diện."""
+    """Ghi lỗi ở backend, chỉ trả hướng dẫn thân thiện ra giao diện."""
     code = getattr(e, "code", None)
-    logging.getLogger("chatbot").exception("Lỗi gọi Gemini")               # đầy đủ trong Manage app -> logs
+    logging.getLogger("chatbot").exception("Lỗi gọi Gemini")
     if isinstance(code, int) and code >= 500:
-        detail = f"{code} {getattr(e, 'status', '') or ''}: {str(getattr(e, 'message', '') or e)[:200]}".strip()
-        return ("Máy chủ Gemini đang quá tải hoặc gặp lỗi tạm thời (đã tự thử lại vài lần). Vui lòng thử lại sau ít phút."
-                f"\n\n*Chi tiết: {detail}*")
+        return "Trợ lý đang bận hoặc gặp sự cố tạm thời. Bạn thử lại sau ít phút nhé."
     if code == 429:
-        return "Đã hết hạn mức miễn phí của Gemini trong lúc này. Vui lòng thử lại sau ít phút."
+        return "Trợ lý đang tạm hết lượt sử dụng. Bạn thử lại sau hoặc dùng Tra số trực tiếp nhé."
     if code in (400, 401, 403):
-        return "Khóa Gemini không hợp lệ hoặc chưa có quyền. Quản trị viên cần kiểm tra GEMINI_API_KEY."
+        return "Trợ lý hiện chưa thể xử lý yêu cầu. Bạn thử lại sau nhé."
     if code == 404:
-        return "Mô hình Gemini được chọn không có cho khóa này. Quản trị viên hãy đặt GEMINI_MODEL sang mô hình khác."
-    return f"Không gọi được mô hình ({type(e).__name__}). Vui lòng thử lại sau."
+        return "Trợ lý hiện chưa sẵn sàng. Bạn thử lại sau hoặc dùng Tra số trực tiếp nhé."
+    return "Đã có sự cố khi xử lý yêu cầu. Bạn thử lại sau nhé."
 
 
 def render_meta(m: dict):
-    if m.get("model"):
-        st.caption(f"Mô hình: {m['model']}")
     if m.get("warnings") or m.get("unsupported"):
         if m.get("unsupported"):
             st.warning("Các số sau trong câu trả lời **không khớp** kết quả công cụ, hãy kiểm tra lại: "
                        + ", ".join(m["unsupported"]))
         for w in m.get("warnings", []):
             st.warning(w)
-    if m.get("tool_calls"):
-        with st.expander(f"Công cụ đã dùng và nguồn ({len(m['tool_calls'])} lần gọi)"):
-            for t in m["tool_calls"]:
-                st.markdown(f"**{t['name']}** `{t['input']}` — {'✅' if t['ok'] else '❌'}")
-                st.caption(t["text"][:700])
-            srcs = sorted({(s["doc"], s["statement"], s["page"]) for s in m.get("sources", [])})
-            if srcs:
-                st.markdown("**Nguồn:** " + "; ".join(f"{d} · {st_} · trang PDF {p}" for d, st_, p in srcs))
+    source_map = {}
+    for source in m.get("sources", []):
+        citation = (source.get("doc", "Tài liệu"), source.get("statement", ""), source.get("page"))
+        source_map[citation] = source.get("url") or source.get("link") or source.get("pdf_url")
+    if source_map:
+        st.markdown("**Nguồn tham khảo**")
+        for (doc, statement, page), url in sorted(
+            source_map.items(),
+            key=lambda item: (item[0][0], item[0][1], item[0][2] is None, item[0][2] or 0),
+        ):
+            citation = f"{doc} · {statement} · trang PDF {page if page is not None else 'không rõ'}"
+            url = url or OFFICIAL_PDF_URLS.get(doc) or OFFICIAL_REPORTS_URL
+            link_label = "Mở PDF" if doc in OFFICIAL_PDF_URLS else "Mở trang báo cáo Vinamilk"
+            st.markdown(f"- {citation} · [{link_label}]({url})")
 
 
 def chat_tab():
@@ -130,11 +137,11 @@ def chat_tab():
                     r = get_agent().ask(question, st.session_state.api)
                 st.session_state.asked += 1
                 msg = r.answer
-                meta = {"tool_calls": [{"name": t.name, "input": t.input, "ok": t.ok, "text": t.text} for t in r.tool_calls],
-                        "sources": r.sources, "warnings": r.warnings, "unsupported": r.unsupported_numbers, "model": r.model}
+                meta = {"sources": r.sources, "warnings": r.warnings,
+                    "unsupported": r.unsupported_numbers}
             except AgentConfigError as e:
-                msg, meta = ("Tính năng hỏi đáp bằng AI chưa được bật trên bản này (chưa cấu hình khóa Gemini). "
-                             f"Bạn vẫn có thể dùng tab *Tra số trực tiếp*.\n\n*Chi tiết cho quản trị viên: {e}*"), {}
+                logging.getLogger("chatbot").warning("Trợ lý AI chưa sẵn sàng: %s", e)
+                msg, meta = "Trợ lý chưa sẵn sàng. Bạn vẫn có thể dùng Tra số trực tiếp.", {}
             except Exception as e:                                           # noqa: BLE001 - không lộ stack trace ra giao diện
                 msg, meta = friendly_error(e), {}
         st.markdown(msg)
@@ -182,7 +189,7 @@ with st.sidebar:
     for q in EXAMPLES:
         if st.button(q, use_container_width=True):
             st.session_state["pending_example"] = q
-    if st.button("Xóa hội thoại"):
+    if st.button("Cuộc trò chuyện mới", key="new_conversation"):
         for k in ("ui", "api", "asked"):
             st.session_state.pop(k, None)
         st.rerun()
