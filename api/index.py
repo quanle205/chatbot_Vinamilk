@@ -127,26 +127,6 @@ def ask(body: AskBody, request: Request):
             "unsupported_numbers": r.unsupported_numbers}
 
 
-@app.get("/api/diag")
-def diag():
-    """Thử gọi từng mô hình Gemini một lần (giới hạn thời gian) để biết mô hình nào trả lời được trên máy chủ này. Không trả khóa."""
-    from src.agent.agent import make_client
-    try:
-        client = make_client()
-    except AgentConfigError:
-        return {"ok": False, "error": "chưa đặt GEMINI_API_KEY"}
-    out = []
-    for model in get_agent().models:
-        t = time.time()
-        try:
-            r = client.models.generate_content(model=model, contents="Trả lời đúng một từ: xin chào")
-            out.append({"model": model, "ok": True, "seconds": round(time.time() - t, 1), "reply": (r.text or "")[:40]})
-        except Exception as e:                                               # noqa: BLE001
-            out.append({"model": model, "ok": False, "seconds": round(time.time() - t, 1), "code": getattr(e, "code", None),
-                        "error": type(e).__name__, "message": str(getattr(e, "message", "") or e)[:160]})
-    return {"ok": any(o["ok"] for o in out), "models": out}
-
-
 @app.post("/api/lookup")
 def lookup(body: LookupBody, request: Request):
     _rate_limit(request)
