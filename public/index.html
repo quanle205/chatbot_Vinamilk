@@ -66,6 +66,7 @@
   <div class="tabs" role="tablist">
     <button class="tab" role="tab" id="t-chat" aria-selected="true" aria-controls="p-chat">Hỏi đáp</button>
     <button class="tab" role="tab" id="t-lookup" aria-selected="false" aria-controls="p-lookup">Tra số trực tiếp</button>
+    <button class="tab" role="tab" id="t-charts" aria-selected="false" aria-controls="p-charts">Biểu đồ</button>
   </div>
 
   <section class="panel" id="p-chat" role="tabpanel" aria-labelledby="t-chat">
@@ -94,6 +95,28 @@
       <button class="go" type="submit">Tra số</button>
     </form>
     <div id="lookup-out">Chọn chỉ tiêu và kỳ rồi bấm Tra số.</div>
+  </section>
+
+  <section class="panel" id="p-charts" role="tabpanel" aria-labelledby="t-charts" hidden>
+    <form id="chart-form" class="row">
+      <select id="c-mode" aria-label="Kiểu biểu đồ">
+        <option value="series" selected>Xu hướng 6 kỳ</option><option value="growth">So sánh hai kỳ</option><option value="explain">Phân rã biến động</option>
+      </select>
+      <select id="c-m1" aria-label="Chỉ tiêu 1"></select>
+      <select id="c-m2" aria-label="Chỉ tiêu 2 (tùy chọn)"></select>
+      <select id="c-m3" aria-label="Chỉ tiêu 3 (tùy chọn)"></select>
+      <select id="c-period" aria-label="Kỳ báo cáo">
+        <option>Q1/2025</option><option>Q2/2025</option><option>Q3/2025</option><option>Q4/2025</option><option>Q1/2026</option><option selected>Q2/2026</option>
+      </select>
+      <select id="c-kind" aria-label="So với">
+        <option value="yoy" selected>So với cùng kỳ năm trước</option><option value="qoq">So với quý liền trước</option>
+      </select>
+      <select id="c-basis" aria-label="Cách tính">
+        <option value="quy" selected>Riêng quý</option><option value="luy_ke">Lũy kế từ đầu năm</option>
+      </select>
+      <button class="go" type="submit">Vẽ biểu đồ</button>
+    </form>
+    <div id="chart-out"><p class="cv-note">Chọn kiểu biểu đồ và chỉ tiêu rồi bấm Vẽ biểu đồ. Số liệu lấy thẳng từ báo cáo, không qua trợ lý; chọn tối đa 3 chỉ tiêu để đặt cạnh nhau so sánh.</p></div>
   </section>
 
   <footer>Chỉ cung cấp thông tin từ báo cáo tài chính, không phải khuyến nghị đầu tư.</footer>
@@ -203,12 +226,21 @@ function tableHtml(block) {
   return `<div class="tbl"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody>${foot ? `<tfoot>${foot}</tfoot>` : ""}</table></div>`;
 }
 
+function summaryHtml(b) {
+  const m = b.summary;
+  if (!m) return "";
+  const t = x => `${esc(x.label)} (${vn(x.value / b.scale)} ${esc(b.unit)})`;
+  const bare = x => esc(x.label.replace(/^tại /, ""));                          // "tại ngày 30/6/2026" -> "ngày 30/6/2026"
+  const trend = `từ ${bare(m.first)} đến ${bare(m.last)}: ${signed(m.change / b.scale)} ${esc(b.unit)}` + (m.growth != null ? ` (${signed(m.growth * 100)}%)` : "");
+  return `<p class="cv-note">Cao nhất: ${t(m.max)}; thấp nhất: ${t(m.min)}; ${trend}.</p>`;
+}
+
 function chartsEl(blocks) {
   if (!blocks || !blocks.length) return null;
   const wrap = document.createElement("div"); wrap.className = "charts";
   blocks.forEach(b => {
     const box = document.createElement("div"); box.className = "chartbox";
-    box.innerHTML = `<h3>${esc(b.title)}</h3>` + tableHtml(b);
+    box.innerHTML = `<h3>${esc(b.title)}</h3>` + summaryHtml(b) + tableHtml(b);
     wrap.appendChild(box);
     if (b.chart && b.rows.length >= 2) drawChart(box, b);
   });
@@ -282,14 +314,54 @@ $("lookup-form").onsubmit = async e => {
   } catch (_) { $("lookup-out").textContent = "Không tra được, thử lại sau."; }
 };
 
+
+// ---- mục Biểu đồ: chọn chỉ tiêu và kiểu so sánh, lấy số thẳng từ công cụ (không qua trợ lý)
+const CHART_METRICS = ["doanh thu thuần", "giá vốn hàng bán", "lợi nhuận gộp", "chi phí bán hàng", "chi phí quản lý doanh nghiệp",
+  "lợi nhuận sau thuế", "tổng tài sản", "nợ phải trả", "vốn chủ sở hữu", "hàng tồn kho", "lưu chuyển tiền từ hoạt động kinh doanh"];
+const EXPLAIN_METRICS = ["lợi nhuận sau thuế", "doanh thu thuần"];
+function fillMetric(sel, list, optional, keep) {
+  sel.innerHTML = (optional ? '<option value="">— thêm chỉ tiêu —</option>' : "") + list.map(m => `<option>${esc(m)}</option>`).join("");
+  sel.value = list.includes(keep) ? keep : (optional ? "" : list[0]);
+}
+function syncChartMode() {
+  const mode = $("c-mode").value, series = mode === "series";
+  fillMetric($("c-m1"), mode === "explain" ? EXPLAIN_METRICS : CHART_METRICS, false, $("c-m1").value);
+  $("c-m2").hidden = $("c-m3").hidden = !series;
+  $("c-period").hidden = series;
+  $("c-kind").hidden = series;
+}
+fillMetric($("c-m2"), CHART_METRICS, true); fillMetric($("c-m3"), CHART_METRICS, true);
+syncChartMode();
+$("c-mode").onchange = syncChartMode;
+$("chart-form").onsubmit = async e => {
+  e.preventDefault();
+  const out = $("chart-out"), series = $("c-mode").value === "series";
+  const metrics = [...new Set(["c-m1", "c-m2", "c-m3"].map(i => $(i).value).filter((v, k) => v && (series || k === 0)))];
+  if ($("c-mode").value === "explain" && $("c-kind").value === "qoq" && $("c-basis").value === "luy_ke") {
+    out.innerHTML = '<div class="msg err">So với quý liền trước chỉ áp dụng cho số liệu riêng quý. Hãy chọn "Riêng quý" hoặc "So với cùng kỳ năm trước".</div>';
+    return;
+  }
+  out.innerHTML = '<p class="cv-note">Đang dựng biểu đồ…</p>';
+  try {
+    const r = await fetch("/api/chart", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: $("c-mode").value, metrics, period: series ? null : $("c-period").value, kind: $("c-kind").value, basis: $("c-basis").value }) });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Không dựng được biểu đồ, bạn thử lại nhé.");
+    const el = chartsEl(data.charts);
+    out.innerHTML = "";
+    if (el) out.appendChild(el); else out.innerHTML = '<p class="cv-note">Không có số liệu cho lựa chọn này.</p>';
+  } catch (err) { out.innerHTML = ""; const n = document.createElement("div"); n.className = "msg err"; n.textContent = err.message; out.appendChild(n); }
+};
+
 function pick(which) {
-  for (const k of ["chat", "lookup"]) {
+  for (const k of ["chat", "lookup", "charts"]) {
     $("t-" + k).setAttribute("aria-selected", String(k === which));
     $("p-" + k).hidden = k !== which;
   }
 }
 $("t-chat").onclick = () => pick("chat");
 $("t-lookup").onclick = () => pick("lookup");
+$("t-charts").onclick = () => pick("charts");
 </script>
 </body>
 </html>

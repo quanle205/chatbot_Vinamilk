@@ -32,13 +32,20 @@ Tài liệu cho nhóm cập nhật báo cáo (mục 2.4.2, 2.5.4 và Chương 3)
   429 khi gửi quá nhanh (bộ đếm riêng, không trừ vào lượt hỏi), 502 khi nơi lưu lỗi (log chỉ ghi tên loại lỗi). Bản ghi không có IP, tiêu đề hay khóa.
 - `public/index.html`: nút 👍/👎 dưới mỗi câu trả lời, bấm xong hiện lời cảm ơn; lỗi mạng thì cho bấm lại.
 
+## 4. Mục "Biểu đồ" để so sánh, đánh giá
+
+- `POST /api/chart` `{mode: series|growth|explain, metrics (1-3), period?, kind: yoy|qoq, basis}`: gọi `get_series`/`get_growth`/`explain_change` rồi dựng bằng cùng `build_charts`
+  (không qua Gemini). 422 khi sai dữ liệu hoặc thiếu kỳ, 400 kèm lý do tiếng Việt khi công cụ từ chối (vd phân rã chỉ tiêu không hỗ trợ), 429 có bộ đếm riêng.
+- `charts.py`: khối `series` có thêm `summary` (cao nhất, thấp nhất, đầu, cuối, thay đổi, tăng trưởng) do code tính; giao diện hiện thành một dòng nhận xét, cả trong tab Biểu đồ lẫn khi hỏi đáp.
+- `public/index.html`: tab "Biểu đồ" với các ô chọn kiểu, chỉ tiêu, kỳ, cách so sánh; tái sử dụng phần vẽ biểu đồ/bảng của hỏi đáp.
+
 ## Kiểm thử
 
 | Bộ test | Trước | Sau |
 |---|---|---|
 | tests/test_tools.py | 10/10 đạt | 13/13 đạt (thêm 3 test `explain_change`) |
 | tests/test_agent.py | 23/23 đạt | 25/25 đạt (thêm 2 test: guard với số phân rã, khai báo công cụ/prompt) |
-| tests/test_api.py | 8/8 đạt | 16/16 đạt (biểu đồ 6 kỳ, câu một kỳ không biểu đồ, bảng so sánh/phân rã, phản hồi 200/422/429/502, webhook, không lộ khóa/IP) |
+| tests/test_api.py | 8/8 đạt | 20/20 đạt (thêm 4 test `/api/chart`; biểu đồ 6 kỳ, câu một kỳ không biểu đồ, bảng so sánh/phân rã, phản hồi 200/422/429/502, webhook, không lộ khóa/IP) |
 
 Kiểm tra tay (Chrome headless, Gemini thật, máy chủ cục bộ): câu xu hướng 6 quý, so sánh cùng kỳ, câu một kỳ, câu "vì sao lợi nhuận tăng", bấm 👍; giao diện 390 px không tràn ngang; console không có lỗi.
 

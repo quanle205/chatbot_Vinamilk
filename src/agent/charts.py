@@ -5,6 +5,7 @@ Mỗi khối là dict thuần JSON:
   title, unit ("tỷ đồng"), scale (1e9: giá trị VND chia cho scale để ra đơn vị hiển thị)
   chart  True nếu giao diện nên vẽ biểu đồ (chỉ khi có từ 2 kỳ trở lên của get_series)
   rows   [{label, value, period?, source?}]   value giữ nguyên VND; source = {doc, statement, page, code} của số đó
+  summary (chỉ series, từ 2 kỳ) {max, min: {label, value}, first, last: {label, value}, change, growth} do code tính để người dùng đánh giá nhanh
 Định dạng số kiểu Việt Nam do giao diện đảm nhiệm.
 """
 from __future__ import annotations
@@ -33,9 +34,16 @@ def _series(res: dict) -> dict | None:
     except KeyError:
         return None
     basis = "" if m.kind == "balance" else f" ({BASIS_WORDS.get(res.get('basis'), '')})"
-    return {"kind": "series", "title": f"{m.name}{basis}", "unit": UNIT, "scale": SCALE, "chart": len(rows) >= 2,
-            "rows": [{"period": r["period"], "label": r["description"], "value": r["value"], "source": _source(r.get("sources", []))}
-                     for r in rows]}
+    out = {"kind": "series", "title": f"{m.name}{basis}", "unit": UNIT, "scale": SCALE, "chart": len(rows) >= 2,
+           "rows": [{"period": r["period"], "label": r["description"], "value": r["value"], "source": _source(r.get("sources", []))}
+                    for r in rows]}
+    if len(rows) >= 2:
+        pick = lambda r: {"label": r["description"], "value": r["value"]}          # noqa: E731
+        first, last = rows[0], rows[-1]
+        out["summary"] = {"max": pick(max(rows, key=lambda r: r["value"])), "min": pick(min(rows, key=lambda r: r["value"])),
+                          "first": pick(first), "last": pick(last), "change": last["value"] - first["value"],
+                          "growth": None if first["value"] == 0 else (last["value"] - first["value"]) / abs(first["value"])}
+    return out
 
 
 def _comparison(res: dict) -> dict | None:
