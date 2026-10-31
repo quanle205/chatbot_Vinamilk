@@ -30,6 +30,26 @@ tăng trưởng, tìm nội dung thuyết minh. Số liệu lấy từ PDF bằn
   Không lưu IP hay dữ liệu cá nhân. Mặc định mỗi phản hồi là một dòng `FEEDBACK {...}` trong Vercel Logs; đặt `FEEDBACK_WEBHOOK_URL`
   (và tùy chọn `FEEDBACK_WEBHOOK_TOKEN`) để gửi sang dịch vụ lưu trữ riêng; `FEEDBACK_LIMIT_PER_MINUTE` (mặc định 20) giới hạn tốc độ gửi.
 
+## Giao diện
+
+`public/index.html` (HTML + CSS + JS thuần trong một tệp, không bước build) có bố cục hai cột: thanh bên (cuộc trò chuyện mới, 5 mục menu,
+danh sách "Gần đây" lưu trong `localStorage`, hai chỉ báo DuckDB/Gemini lấy từ `/api/health`) và vùng chính (thanh trên có chọn kỳ báo cáo,
+màn hình chào với 6 thẻ gợi ý, ô nhập bo tròn). Có chế độ tối theo hệ thống, ngăn kéo thanh bên dưới 900 px, đổi tên/xóa cuộc trò chuyện,
+nút Dừng/Sao chép/Tạo lại/Thử lại, thẻ "Nguồn" mở ảnh trang PDF có khung đỏ, biểu đồ đường Chart.js cho câu hỏi nhiều kỳ.
+Mục "Tra cứu số liệu" gọi `/api/lookup`; ba mục chưa có API (Thuyết minh & nguồn, Xu hướng & so sánh, Thống kê) hiện "Sắp có".
+Kỳ báo cáo được đưa vào câu hỏi dưới dạng gợi ý ngữ cảnh ("Nếu không nêu kỳ, hiểu là kỳ …") vì `/api/ask` chưa nhận tham số kỳ.
+Bản giao diện cũ giữ ở `public/index.old.html`.
+
+| Trước | Sau (sáng) | Sau (tối) |
+|---|---|---|
+| ![Giao diện cũ](docs/screenshots/truoc-giao-dien-cu.png) | ![Màn hình chào](docs/screenshots/sau-man-hinh-chao-sang.png) | ![Chế độ tối](docs/screenshots/sau-man-hinh-chao-toi.png) |
+
+![Trả lời kèm nguồn](docs/screenshots/sau-tra-loi-co-nguon-sang.png)
+
+| Điện thoại | Ngăn kéo |
+|---|---|
+| ![Điện thoại](docs/screenshots/sau-dien-thoai-man-hinh-chao.png) | ![Ngăn kéo](docs/screenshots/sau-dien-thoai-ngan-keo.png) |
+
 ## Chạy chatbot
 
 Triển khai trên Vercel: import repo, Framework **Other** (không đổi Build Command), đặt biến môi trường `GEMINI_API_KEY`

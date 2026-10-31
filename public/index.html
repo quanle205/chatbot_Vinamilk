@@ -2,304 +2,742 @@
 <html lang="vi">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Chatbot BCTC Vinamilk</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chatbot Phân Tích Tài Chính</title>
+<meta name="description" content="Chatbot BCTC Vinamilk: hỏi đáp trên báo cáo tài chính hợp nhất Q1/2025 – Q2/2026, có trích dẫn trang PDF.">
 <link rel="icon" href="data:,">
 <style>
-  :root { --bg:#f7f8fa; --card:#fff; --ink:#1b2a38; --mute:#5b6b7a; --line:#dde3ea; --accent:#0b3c5d; --accent-ink:#fff; --user:#e8f0f7; --warn:#fff4e5; --warn-ink:#7a4a00; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#0f1720; --card:#16212d; --ink:#e6edf3; --mute:#93a4b5; --line:#2a3947; --accent:#5aa6d6; --accent-ink:#0b1620; --user:#1d2f40; --warn:#3a2c10; --warn-ink:#ffd58a; } }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 system-ui, "Segoe UI", Roboto, sans-serif; }
-  .wrap { max-width:860px; margin:0 auto; padding:16px; }
-  h1 { font-size:22px; margin:8px 0 4px; }
-  p.sub { margin:0 0 16px; color:var(--mute); font-size:14px; }
-  .tabs { display:flex; gap:8px; margin-bottom:12px; }
-  .tab { padding:8px 14px; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:8px; cursor:pointer; font:inherit; }
-  .tab[aria-selected="true"] { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
-  .panel[hidden] { display:none; }
-  .chips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
-  .chip { padding:6px 10px; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:16px; cursor:pointer; font-size:14px; text-align:left; }
-  #log { display:flex; flex-direction:column; gap:10px; min-height:120px; margin-bottom:12px; }
-  .msg { padding:10px 14px; border-radius:12px; border:1px solid var(--line); background:var(--card); white-space:pre-wrap; word-wrap:break-word; }
-  .msg.user { background:var(--user); align-self:flex-end; max-width:85%; }
-  .msg.err { background:var(--warn); color:var(--warn-ink); }
-  .src { margin-top:8px; font-size:14px; color:var(--mute); white-space:normal; }
-  .src ul { margin:4px 0 0 18px; padding:0; }
-  .src li { margin-bottom:8px; }
-  .src summary { cursor:pointer; color:var(--accent); }
-  .src a.pg { position:relative; display:block; }
-  .src .hl { position:absolute; border:2px solid #e11d48; background:rgba(225,29,72,.12); border-radius:3px; pointer-events:none; }
-  .src img { display:block; max-width:100%; margin-top:6px; border:1px solid var(--line); border-radius:8px; background:#fff; }
-  .warn { margin-top:8px; padding:8px 10px; border-radius:8px; background:var(--warn); color:var(--warn-ink); font-size:14px; white-space:normal; }
-  .charts { margin-top:10px; display:flex; flex-direction:column; gap:14px; white-space:normal; }
-  .chartbox { border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--card); }
-  .chartbox h3 { margin:0 0 6px; font-size:15px; }
-  .cv { position:relative; height:240px; }
-  .cv-note { font-size:13px; color:var(--mute); margin:4px 0 0; }
-  .tbl { overflow-x:auto; margin-top:8px; }
-  .tbl table { border-collapse:collapse; width:100%; font-size:14px; }
-  .tbl caption { text-align:left; color:var(--mute); font-size:13px; padding:2px 0; }
-  .tbl th, .tbl td { border-bottom:1px solid var(--line); padding:5px 8px; text-align:left; }
+  :root {
+    --bg:#ffffff; --side:#f7f7f8; --ink:#111418; --mute:#5f6672; --line:#e8eaed; --card:#ffffff; --soft:#f1f2f4;
+    --accent:#111418; --accent-ink:#ffffff; --user:#f1f2f4; --warn:#fff4e5; --warn-ink:#7a4a00; --err:#fdecec; --err-ink:#9b1c1c;
+    --ok:#16a34a; --bad:#dc2626; --focus:#2563eb; --hl:#e11d48; --shadow:0 1px 2px rgba(16,24,40,.04), 0 4px 16px rgba(16,24,40,.06);
+    --font:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1115; --side:#14171c; --ink:#eceef1; --mute:#9aa3af; --line:#262b33; --card:#171a20; --soft:#1e2229;
+      --accent:#eceef1; --accent-ink:#0f1115; --user:#1e2229; --warn:#3a2c10; --warn-ink:#ffd58a; --err:#3a1717; --err-ink:#ffb4b4;
+      --ok:#22c55e; --bad:#f87171; --focus:#60a5fa; --shadow:0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.35); }
+  }
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.6 var(--font); -webkit-font-smoothing:antialiased; }
+  button, input, select, textarea { font:inherit; color:inherit; }
+  button { cursor:pointer; }
+  :focus-visible { outline:2px solid var(--focus); outline-offset:2px; border-radius:6px; }
+  .ic { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+  .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+  [hidden] { display:none !important; }
+
+  /* ---- khung */
+  .app { display:grid; grid-template-columns:320px minmax(0,1fr); height:100vh; height:100dvh; }
+  .side { background:var(--side); border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0; padding:18px 14px 12px; gap:14px; }
+  .main { display:flex; flex-direction:column; min-width:0; min-height:0; }
+  .scrim { display:none; }
+
+  /* ---- thanh bên */
+  .brand { display:flex; align-items:center; gap:12px; padding:2px 6px; }
+  .logo { width:40px; height:40px; border-radius:12px; background:#111418; color:#fff; display:grid; place-items:center; flex:none; }
+  .logo .ic { width:22px; height:22px; }
+  @media (prefers-color-scheme: dark) { .logo { background:#eceef1; color:#0f1115; } }
+  .brand-name { font-weight:700; font-size:15px; line-height:1.25; }
+  .brand-sub { color:var(--mute); font-size:12.5px; line-height:1.35; }
+  .newchat { display:flex; align-items:center; gap:8px; width:100%; padding:10px 14px; border:1px solid var(--line); background:var(--card); border-radius:12px; font-weight:500; }
+  .newchat:hover { background:var(--soft); }
+  .nav { display:flex; flex-direction:column; gap:2px; }
+  .nav-item { display:flex; align-items:center; gap:10px; width:100%; padding:9px 12px; border:0; background:none; border-radius:10px; text-align:left; color:var(--ink); }
+  .nav-item:hover:not(:disabled) { background:var(--soft); }
+  .nav-item[aria-current="page"] { background:var(--soft); font-weight:600; }
+  .nav-item:disabled { opacity:.5; cursor:default; }
+  .nav-item .soon { margin-left:auto; font-size:11px; color:var(--mute); border:1px solid var(--line); border-radius:999px; padding:0 7px; }
+  .label { font-size:11.5px; letter-spacing:.06em; font-weight:600; color:var(--mute); padding:0 8px; }
+  .recent { list-style:none; margin:0; padding:0; overflow:auto; flex:1; min-height:60px; display:flex; flex-direction:column; gap:2px; }
+  .recent-empty { color:var(--mute); font-size:13.5px; padding:6px 8px; }
+  .conv { display:flex; align-items:center; gap:2px; border-radius:10px; }
+  .conv:hover, .conv:focus-within, .conv.active { background:var(--soft); }
+  .conv-title { flex:1; min-width:0; text-align:left; border:0; background:none; padding:8px 10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; border-radius:10px; }
+  .conv.active .conv-title { font-weight:600; }
+  .conv-act { opacity:0; border:0; background:none; padding:6px; border-radius:8px; color:var(--mute); display:grid; place-items:center; }
+  .conv:hover .conv-act, .conv:focus-within .conv-act { opacity:1; }
+  .conv-act:hover { color:var(--ink); background:var(--line); }
+  .conv-act.confirm { opacity:1; color:var(--bad); font-size:12.5px; padding:4px 8px; font-weight:600; }
+  .conv input { flex:1; min-width:0; margin:3px 4px; padding:5px 8px; border:1px solid var(--line); border-radius:8px; background:var(--card); }
+  @media (hover:none) { .conv-act { opacity:.7; } }
+  .status { border-top:1px solid var(--line); padding-top:10px; display:flex; flex-direction:column; gap:6px; font-size:13.5px; }
+  .ind { display:flex; align-items:center; gap:8px; padding:0 8px; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--mute); flex:none; }
+  .dot.ok { background:var(--ok); } .dot.bad { background:var(--bad); }
+  .ind .val { margin-left:auto; color:var(--mute); }
+
+  /* ---- thanh trên */
+  .top { display:flex; align-items:center; gap:10px; padding:12px 20px; border-bottom:1px solid var(--line); min-height:60px; }
+  .top-title { font-size:15px; font-weight:600; margin:0; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .icon-btn { border:0; background:none; padding:8px; border-radius:10px; display:grid; place-items:center; }
+  .icon-btn:hover { background:var(--soft); }
+  .menu-btn { display:none; }
+  .pill-wrap { position:relative; }
+  .pill { display:flex; align-items:center; gap:8px; padding:8px 14px; border:1px solid var(--line); background:var(--card); border-radius:999px; font-size:14px; }
+  .pill:hover { background:var(--soft); }
+  .pill .l { color:var(--mute); }
+  .menu { position:absolute; right:0; top:calc(100% + 6px); z-index:20; min-width:200px; margin:0; padding:6px; list-style:none; background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); }
+  .menu button { display:flex; width:100%; justify-content:space-between; gap:12px; border:0; background:none; padding:8px 12px; border-radius:8px; text-align:left; }
+  .menu button:hover { background:var(--soft); }
+  .menu button[aria-checked="true"] { font-weight:600; }
+
+  /* ---- vùng nội dung */
+  .view { display:flex; flex-direction:column; flex:1; min-height:0; }
+  .scroll { flex:1; overflow-y:auto; min-height:0; }
+  .col { width:100%; max-width:800px; margin:0 auto; padding:0 20px; }
+  #welcome { padding-top:clamp(28px, 9vh, 96px); padding-bottom:16px; }
+  .w-title { font-size:clamp(28px, 4.2vw, 40px); line-height:1.2; font-weight:800; margin:0 0 12px; letter-spacing:-.01em; }
+  .w-desc { color:var(--mute); font-size:16px; margin:0 0 28px; max-width:640px; }
+  .cards { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .card-btn { display:flex; flex-direction:column; align-items:flex-start; gap:8px; text-align:left; padding:14px 16px; border:1px solid var(--line); background:var(--card); border-radius:14px; min-height:96px; }
+  .card-btn:hover { background:var(--soft); }
+  .tag { font-size:12px; color:#4b5563; background:var(--soft); border-radius:999px; padding:1px 10px; }
+  @media (prefers-color-scheme: dark) { .tag { color:var(--mute); background:var(--line); } }
+  .card-btn:hover .tag { background:var(--line); }
+  .stats { display:flex; flex-wrap:wrap; gap:6px 22px; margin-top:22px; color:var(--mute); font-size:14px; }
+  .stats b { color:var(--ink); font-weight:700; }
+
+  /* ---- hội thoại */
+  #log { display:flex; flex-direction:column; gap:22px; padding:24px 0 12px; }
+  .msg.user { align-self:flex-end; max-width:85%; }
+  .bubble { background:var(--user); border-radius:16px; padding:10px 16px; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .msg.bot { max-width:100%; min-width:0; }
+  .typing { color:var(--mute); }
+  .typing i { display:inline-block; width:5px; height:5px; margin-left:3px; border-radius:50%; background:var(--mute); animation:blink 1.2s infinite both; }
+  .typing i:nth-child(2) { animation-delay:.2s; } .typing i:nth-child(3) { animation-delay:.4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity:.25; } 40% { opacity:1; } }
+  .errbox { background:var(--err); color:var(--err-ink); border-radius:12px; padding:10px 14px; }
+  .btn { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); background:var(--card); border-radius:10px; padding:5px 12px; font-size:14px; }
+  .btn:hover:not(:disabled) { background:var(--soft); }
+  .btn:disabled { opacity:.5; cursor:default; }
+  .btn.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+  .errbox .btn { margin-top:8px; background:transparent; border-color:currentColor; color:inherit; }
+  .warn { margin-top:8px; padding:8px 12px; border-radius:10px; background:var(--warn); color:var(--warn-ink); font-size:14px; }
+  .actions { display:flex; flex-wrap:wrap; align-items:center; gap:2px; margin-top:6px; color:var(--mute); font-size:13.5px; }
+  .act { display:inline-flex; align-items:center; gap:6px; border:0; background:none; padding:5px 9px; border-radius:8px; color:var(--mute); font-size:13.5px; }
+  .act:hover:not(:disabled) { background:var(--soft); color:var(--ink); }
+  .act:disabled { opacity:.5; cursor:default; }
+  .act.icon-only { padding:6px; }
+  .actions .thanks { margin-left:6px; }
+
+  .md > :first-child { margin-top:0; } .md > :last-child { margin-bottom:0; }
+  .md p { margin:0 0 10px; overflow-wrap:anywhere; }
+  .md h4 { margin:14px 0 6px; font-size:15.5px; }
+  .md ul, .md ol { margin:0 0 10px; padding-left:22px; } .md li { margin:2px 0; }
+  .md code { background:var(--soft); border-radius:5px; padding:1px 5px; font-size:.92em; }
+  .md hr { border:0; border-top:1px solid var(--line); margin:12px 0; }
+  .md-tbl, .tbl { overflow-x:auto; margin:6px 0 12px; }
+  .md-tbl table, .tbl table { border-collapse:collapse; width:100%; font-size:14px; }
+  .md-tbl th, .md-tbl td, .tbl th, .tbl td { border-bottom:1px solid var(--line); padding:6px 10px; text-align:left; vertical-align:top; }
+  .md-tbl th, .tbl th { font-weight:600; background:var(--soft); }
   .tbl th.n, .tbl td.n { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
   .tbl tfoot td { font-weight:600; }
-  .fb { margin-top:8px; display:flex; align-items:center; gap:8px; font-size:14px; color:var(--mute); white-space:normal; }
-  .fb button { border:1px solid var(--line); background:var(--card); border-radius:8px; padding:2px 10px; cursor:pointer; font-size:16px; }
-  .fb button:disabled { opacity:.5; cursor:default; }
-  @media (max-width:520px) { .cv { height:200px; } .wrap { padding:10px; } }
-  form { display:flex; gap:8px; }
-  input, select { font:inherit; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink); }
-  input[type=text] { flex:1; min-width:0; }
-  button.go { padding:10px 16px; border:0; border-radius:8px; background:var(--accent); color:var(--accent-ink); font:inherit; cursor:pointer; }
-  button.go:disabled { opacity:.5; cursor:default; }
-  button.link { background:none; border:0; color:var(--mute); cursor:pointer; font:inherit; padding:0; text-decoration:underline; }
-  .row { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
-  #lookup-out { padding:12px 14px; border:1px solid var(--line); border-radius:12px; background:var(--card); white-space:pre-wrap; }
-  a { color:var(--accent); }
-  footer { margin-top:20px; font-size:13px; color:var(--mute); }
+
+  .charts { display:flex; flex-direction:column; gap:14px; margin-top:10px; }
+  .chartbox { border:1px solid var(--line); border-radius:14px; padding:12px 14px; background:var(--card); }
+  .chartbox h3 { margin:0 0 4px; font-size:15px; }
+  .note { font-size:13.5px; color:var(--mute); margin:4px 0 6px; }
+  .cv { position:relative; height:240px; margin:6px 0; }
+
+  .srcs { margin-top:10px; border:1px solid var(--line); border-radius:12px; background:var(--card); font-size:14px; }
+  .srcs > summary { cursor:pointer; padding:8px 14px; display:flex; align-items:center; gap:8px; color:var(--mute); list-style:none; border-radius:12px; }
+  .srcs > summary::-webkit-details-marker { display:none; }
+  .srcs > summary::after { content:""; margin-left:auto; width:7px; height:7px; border-right:1.8px solid currentColor; border-bottom:1.8px solid currentColor; transform:rotate(45deg); transition:transform .15s; }
+  .srcs[open] > summary::after { transform:rotate(225deg); }
+  .srcs ul { margin:0; padding:0 14px 8px; list-style:none; }
+  .srcs li { padding:10px 0; border-top:1px solid var(--line); }
+  .src-h { font-weight:600; }
+  .src-rows { color:var(--mute); font-size:13.5px; }
+  .src-links { display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:4px; }
+  .srcs a { color:var(--focus); }
+  .pgd summary { cursor:pointer; color:var(--focus); margin-top:4px; }
+  .pg { position:relative; display:block; margin-top:8px; }
+  .pg img { display:block; width:100%; height:auto; border:1px solid var(--line); border-radius:10px; background:#fff; }
+  .pg .hl { position:absolute; border:2px solid var(--hl); background:rgba(225,29,72,.14); border-radius:3px; pointer-events:none; }
+
+  /* ---- ô nhập */
+  .composer-wrap { padding:8px 0 calc(10px + env(safe-area-inset-bottom)); background:var(--bg); }
+  .composer { border:1px solid var(--line); background:var(--card); border-radius:22px; padding:12px 14px 10px 18px; box-shadow:var(--shadow); }
+  .composer:focus-within { border-color:var(--mute); }
+  .composer textarea { display:block; width:100%; border:0; outline:0; resize:none; background:transparent; font-size:16px; line-height:1.5; max-height:160px; padding:2px 0; }
+  .composer textarea::placeholder { color:var(--mute); }
+  .comp-row { display:flex; align-items:center; gap:12px; margin-top:4px; }
+  .ctx { color:var(--mute); font-size:13px; flex:1; min-width:0; }
+  .send { width:38px; height:38px; border-radius:50%; border:0; display:grid; place-items:center; background:var(--accent); color:var(--accent-ink); flex:none; }
+  .send:disabled { background:var(--line); color:var(--mute); cursor:default; }
+  .foot { margin:8px 8px 0; text-align:center; color:var(--mute); font-size:12.5px; }
+  kbd { font:inherit; font-size:11.5px; border:1px solid var(--line); border-bottom-width:2px; border-radius:5px; padding:0 5px; background:var(--soft); }
+
+  /* ---- tra cứu */
+  .page-title { font-size:26px; font-weight:800; margin:40px 0 6px; }
+  .muted { color:var(--mute); margin:0 0 20px; }
+  .lk-form { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin-bottom:16px; }
+  .lk-form label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--mute); }
+  .lk-form input, .lk-form select { padding:9px 12px; border:1px solid var(--line); border-radius:10px; background:var(--card); font-size:15px; }
+  .lk-form input { min-width:240px; }
+  .lk-out { border:1px solid var(--line); border-radius:14px; padding:14px 16px; background:var(--card); white-space:pre-wrap; overflow-wrap:anywhere; }
+
+  /* ---- điện thoại / máy tính bảng */
+  @media (max-width:900px) {
+    .app { grid-template-columns:1fr; }
+    .side { position:fixed; inset:0 auto 0 0; width:min(320px, 86vw); z-index:40; transform:translateX(-100%); transition:transform .2s ease; box-shadow:var(--shadow); }
+    .side.open { transform:none; }
+    .scrim { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:30; }
+    .scrim.show { display:block; }
+    .menu-btn { display:grid; }
+    .cards { grid-template-columns:1fr; }
+    .top { padding:10px 12px; }
+    .col { padding:0 14px; }
+    .pill .l { display:none; }
+    .cv { height:210px; }
+    .lk-form input { min-width:0; width:100%; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; scroll-behavior:auto !important; } }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>Chatbot BCTC Vinamilk</h1>
-  <p class="sub">Hỏi đáp trên báo cáo tài chính hợp nhất quý 1/2025 – quý 2/2026. Số liệu lấy từ PDF bằng OCR và đã đối chiếu; câu trả lời kèm nguồn.</p>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-bars" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M8 17v-5"/><path d="M13 17V8"/><path d="M18 17v-9"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></symbol>
+  <symbol id="i-zigzag" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></symbol>
+  <symbol id="i-stats" viewBox="0 0 24 24"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7M12 19V5"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+  <symbol id="i-thumb-up" viewBox="0 0 24 24"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></symbol>
+  <symbol id="i-thumb-down" viewBox="0 0 24 24"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+</svg>
 
-  <div class="tabs" role="tablist">
-    <button class="tab" role="tab" id="t-chat" aria-selected="true" aria-controls="p-chat">Hỏi đáp</button>
-    <button class="tab" role="tab" id="t-lookup" aria-selected="false" aria-controls="p-lookup">Tra số trực tiếp</button>
-  </div>
+<div class="app" id="app">
+  <aside class="side" id="side" aria-label="Thanh bên">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"><svg class="ic"><use href="#i-bars"/></svg></span>
+      <div><div class="brand-name">Phân Tích Tài Chính AI</div><div class="brand-sub">Hỏi đáp BCTC Vinamilk · Tool + RAG</div></div>
+    </div>
+    <button class="newchat" id="new-chat" type="button"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg>Cuộc trò chuyện mới</button>
+    <nav class="nav" aria-label="Chức năng">
+      <button class="nav-item" type="button" data-view="chat" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg>Trò chuyện</button>
+      <button class="nav-item" type="button" data-view="lookup"><svg class="ic" aria-hidden="true"><use href="#i-book"/></svg>Tra cứu số liệu</button>
+      <button class="nav-item" type="button" disabled aria-disabled="true" title="Sắp có"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg>Thuyết minh &amp; nguồn<span class="soon">Sắp có</span></button>
+      <button class="nav-item" type="button" disabled aria-disabled="true" title="Sắp có"><svg class="ic" aria-hidden="true"><use href="#i-zigzag"/></svg>Xu hướng &amp; so sánh<span class="soon">Sắp có</span></button>
+      <button class="nav-item" type="button" disabled aria-disabled="true" title="Sắp có"><svg class="ic" aria-hidden="true"><use href="#i-stats"/></svg>Thống kê<span class="soon">Sắp có</span></button>
+    </nav>
+    <div class="label" id="recent-label">GẦN ĐÂY</div>
+    <ul class="recent" id="recent" aria-labelledby="recent-label"></ul>
+    <div class="status" aria-label="Trạng thái hệ thống">
+      <div class="ind"><span class="dot" id="dot-db" aria-hidden="true"></span>DuckDB<span class="val" id="val-db">…</span></div>
+      <div class="ind"><span class="dot" id="dot-ai" aria-hidden="true"></span>Gemini<span class="val" id="val-ai">…</span></div>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
 
-  <section class="panel" id="p-chat" role="tabpanel" aria-labelledby="t-chat">
-    <div class="chips" id="chips"></div>
-    <div id="log" aria-live="polite"></div>
-    <form id="chat-form">
-      <input type="text" id="q" maxlength="500" placeholder="Hỏi về số liệu, tỷ số hoặc nội dung thuyết minh…" aria-label="Câu hỏi" autocomplete="off">
-      <button class="go" id="send" type="submit">Gửi</button>
-    </form>
-    <p style="margin:8px 0 0"><button class="link" id="reset" type="button">Cuộc trò chuyện mới</button></p>
-  </section>
+  <main class="main">
+    <header class="top">
+      <button class="icon-btn menu-btn" id="open-side" type="button" aria-label="Mở thanh bên" aria-controls="side" aria-expanded="false"><svg class="ic"><use href="#i-menu"/></svg></button>
+      <h1 class="top-title" id="top-title">Cuộc trò chuyện mới</h1>
+      <div class="pill-wrap">
+        <button class="pill" id="period-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="period-menu">
+          <svg class="ic" aria-hidden="true"><use href="#i-cal"/></svg><span class="l">Kỳ báo cáo</span><strong id="period-label">Q2/2026</strong><svg class="ic" aria-hidden="true"><use href="#i-down"/></svg>
+        </button>
+        <ul class="menu" id="period-menu" role="menu" aria-label="Kỳ báo cáo" hidden></ul>
+      </div>
+    </header>
 
-  <section class="panel" id="p-lookup" role="tabpanel" aria-labelledby="t-lookup" hidden>
-    <form id="lookup-form" class="row">
-      <input type="text" id="metric" value="doanh thu thuần" aria-label="Chỉ tiêu" list="metric-list">
-      <datalist id="metric-list">
-        <option value="doanh thu thuần"><option value="giá vốn hàng bán"><option value="lợi nhuận gộp"><option value="lợi nhuận sau thuế">
-        <option value="tổng tài sản"><option value="nợ phải trả"><option value="vốn chủ sở hữu"><option value="hàng tồn kho">
-      </datalist>
-      <select id="period" aria-label="Kỳ báo cáo">
-        <option>Q1/2025</option><option>Q2/2025</option><option>Q3/2025</option><option>Q4/2025</option><option>Q1/2026</option><option selected>Q2/2026</option>
-      </select>
-      <select id="basis" aria-label="Cách tính">
-        <option value="quy" selected>Riêng quý</option><option value="luy_ke">Lũy kế từ đầu năm</option>
-      </select>
-      <button class="go" type="submit">Tra số</button>
-    </form>
-    <div id="lookup-out">Chọn chỉ tiêu và kỳ rồi bấm Tra số.</div>
-  </section>
+    <section class="view" id="view-chat" aria-label="Trò chuyện">
+      <div class="scroll" id="scroll">
+        <div class="col">
+          <div id="welcome">
+            <h2 class="w-title">Hỏi về báo cáo tài chính Vinamilk</h2>
+            <p class="w-desc">Trả lời dựa trên báo cáo tài chính hợp nhất Q1/2025 – Q2/2026. Mọi con số lấy từ cơ sở dữ liệu, có trích dẫn trang PDF và đúng với kỳ báo cáo bạn chọn (<span id="desc-period">Q2/2026</span>).</p>
+            <div class="cards" id="cards"></div>
+            <div class="stats" id="stats"></div>
+          </div>
+          <div id="log" role="log" aria-live="polite" aria-relevant="additions" aria-label="Cuộc trò chuyện"></div>
+        </div>
+      </div>
+      <div class="composer-wrap">
+        <div class="col">
+          <form class="composer" id="composer" autocomplete="off">
+            <textarea id="q" rows="1" maxlength="450" placeholder="Nhập câu hỏi về báo cáo tài chính Vinamilk..." aria-label="Câu hỏi"></textarea>
+            <div class="comp-row">
+              <span class="ctx" id="ctx">Kỳ Q2/2026 · Báo cáo hợp nhất · Tool + RAG</span>
+              <button class="send" id="send" type="submit" aria-label="Gửi câu hỏi" disabled><svg class="ic" aria-hidden="true"><use href="#i-up"/></svg></button>
+            </div>
+          </form>
+          <p class="foot">Thông tin chỉ mang tính tham khảo; đối chiếu báo cáo gốc trước khi sử dụng. <kbd>Enter</kbd> gửi · <kbd>Shift</kbd>+<kbd>Enter</kbd> xuống dòng</p>
+        </div>
+      </div>
+    </section>
 
-  <footer>Chỉ cung cấp thông tin từ báo cáo tài chính, không phải khuyến nghị đầu tư.</footer>
+    <section class="view" id="view-lookup" aria-label="Tra cứu số liệu" hidden>
+      <div class="scroll"><div class="col">
+        <h2 class="page-title">Tra cứu số liệu</h2>
+        <p class="muted">Tra trực tiếp một chỉ tiêu trong báo cáo hợp nhất, không qua trợ lý. Kết quả kèm nguồn trang PDF.</p>
+        <form class="lk-form" id="lookup-form">
+          <label>Chỉ tiêu<input id="lk-metric" type="text" list="metric-list" value="doanh thu thuần" maxlength="100" autocomplete="off"></label>
+          <datalist id="metric-list">
+            <option value="doanh thu thuần"><option value="giá vốn hàng bán"><option value="lợi nhuận gộp"><option value="lợi nhuận sau thuế">
+            <option value="tổng tài sản"><option value="nợ phải trả"><option value="vốn chủ sở hữu"><option value="hàng tồn kho">
+          </datalist>
+          <label>Kỳ báo cáo<select id="lk-period"></select></label>
+          <label>Cách tính<select id="lk-basis"><option value="quy" selected>Riêng quý</option><option value="luy_ke">Lũy kế từ đầu năm</option></select></label>
+          <button class="btn primary" type="submit">Tra số</button>
+        </form>
+        <div class="lk-out" id="lk-out" aria-live="polite">Chọn chỉ tiêu và kỳ rồi bấm Tra số.</div>
+      </div></div>
+    </section>
+  </main>
 </div>
 
 <script>
-const EXAMPLES = [
-  "Doanh thu thuần quý 1/2026 là bao nhiêu và tăng bao nhiêu so với cùng kỳ?",
-  "Biên lợi nhuận gộp quý 2/2026 so với quý 2/2025?",
-  "Tổng tài sản và nợ phải trả tại 30/6/2026?",
-  "ROE 6 tháng đầu năm 2026 là bao nhiêu?",
-  "Dòng tiền từ hoạt động kinh doanh quý 4/2025?",
-  "Xu hướng doanh thu thuần qua 6 quý?",
-  "Vì sao lợi nhuận sau thuế quý 2/2026 tăng so với cùng kỳ?"
-];
+"use strict";
 const $ = id => document.getElementById(id);
-let history = [];          // [{role: "user"|"model", text}]
-let busy = false;
+const PERIODS = ["Q2/2026", "Q1/2026", "Q4/2025", "Q3/2025", "Q2/2025", "Q1/2025"];
+const ALL = "all";
+const KEY = { convs: "vnm.convs.v1", active: "vnm.active.v1", period: "vnm.period.v1" };
+const SUGGESTIONS = [
+  ["Doanh thu", "Doanh thu thuần quý 2/2026 của Vinamilk là bao nhiêu?"],
+  ["Lợi nhuận", "Lợi nhuận sau thuế quý 2/2026 là bao nhiêu và tăng giảm thế nào so với quý trước?"],
+  ["So sánh cùng kỳ · Q2/2026 so với Q2/2025", "So sánh doanh thu thuần quý 2/2026 với cùng kỳ năm trước."],
+  ["Tỷ số tài chính", "Biên lợi nhuận gộp quý 2/2026 là bao nhiêu?"],
+  ["Xu hướng nhiều kỳ", "Lợi nhuận sau thuế biến động thế nào qua 6 kỳ từ Q1/2025 đến Q2/2026?"],
+  ["Thuyết minh", "Các khoản vay và nợ thuê tài chính của Vinamilk gồm những gì?"],
+];
+const STATEMENTS = { KQKD: "Báo cáo kết quả hoạt động kinh doanh", CDKT: "Báo cáo tình hình tài chính", LCTT: "Báo cáo lưu chuyển tiền tệ" };
 
-function esc(s) { return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
-function fmt(text) {       // văn bản đã escape; chỉ hỗ trợ **đậm** và gạch đầu dòng
-  return esc(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+// ---------------------------------------------------------------- tiện ích
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (_) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (_) { return false; } },
+};
+function h(tag, attrs, ...kids) {              // dựng DOM an toàn: văn bản luôn đi qua textContent, không dùng innerHTML
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === "class") e.className = v;
+    else if (k === "text") e.textContent = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat()) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(String(c)));
+  return e;
 }
-function add(cls, html) {
-  const d = document.createElement("div");
-  d.className = "msg " + cls;
-  d.innerHTML = html;
-  $("log").appendChild(d);
-  d.scrollIntoView({ block: "end" });
-  return d;
+const NS = "http://www.w3.org/2000/svg";
+function icon(name) {
+  const s = document.createElementNS(NS, "svg"), u = document.createElementNS(NS, "use");
+  s.setAttribute("class", "ic"); s.setAttribute("aria-hidden", "true"); u.setAttribute("href", "#i-" + name); s.append(u);
+  return s;
 }
-function sourcesHtml(list) {
-  if (!list || !list.length) return "";
-  const items = list.map(s => {
-    const label = s.is_pdf ? "Mở PDF" : "Mở trang báo cáo Vinamilk";
-    const page = s.page != null ? s.page : "không rõ";
-    const rows = (s.rows && s.rows.length) ? `<div>${esc(s.rows.join("; "))}</div>` : "";
-    const boxes = (s.boxes || []).map(b => `<span class="hl" style="left:${b[0] * 100}%;top:${b[1] * 100}%;width:${b[2] * 100}%;height:${b[3] * 100}%"></span>`).join("");
-    const img = s.image ? `<details><summary>Xem trang PDF dẫn chứng</summary><a class="pg" href="${esc(s.image)}" target="_blank" rel="noopener noreferrer"><img src="${esc(s.image)}" loading="lazy" alt="Trang ${esc(String(page))} của ${esc(s.doc)}">${boxes}</a></details>` : "";
-    return `<li>${esc(s.doc)} · ${esc(s.statement || "")} · trang PDF ${esc(String(page))} · <a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${label}</a>${rows}${img}</li>`;
-  }).join("");
-  return `<div class="src"><strong>Nguồn tham khảo</strong><ul>${items}</ul></div>`;
-}
-
-// ---- định dạng số kiểu Việt Nam (dấu chấm nghìn, dấu phẩy thập phân), khớp với phía máy chủ
-function vn(x, nd = 1) {
+function vn(x, nd = 1) {                        // số kiểu Việt Nam: chấm nghìn, phẩy thập phân
   const a = Math.abs(x).toFixed(nd), [i, f] = a.split(".");
   return (x < 0 && Number(a) !== 0 ? "-" : "") + i.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + (f ? "," + f : "");
 }
 const signed = (x, nd = 1) => (x >= 0 ? "+" : "") + vn(x, nd);
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+const periodLabel = p => (p === ALL ? "tất cả kỳ" : p);
+const docName = d => String(d || "").replace(/^q(\d)-(\d{4})$/i, "Q$1/$2");
 
-// ---- biểu đồ: Chart.js nạp trễ (chỉ khi có biểu đồ cần vẽ), ghim phiên bản + SRI; tải lỗi thì vẫn còn bảng số liệu
+// ---------------------------------------------------------------- markdown an toàn (đoạn, danh sách, in đậm, nghiêng, mã, bảng)
+function inline(text) {
+  const frag = document.createDocumentFragment(), re = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*\s][^*]*\*)/g;
+  let last = 0, m;
+  while ((m = re.exec(text))) {
+    if (m.index > last) frag.append(text.slice(last, m.index));
+    const t = m[0];
+    frag.append(t.startsWith("**") ? h("strong", { text: t.slice(2, -2) }) : t[0] === "`" ? h("code", { text: t.slice(1, -1) }) : h("em", { text: t.slice(1, -1) }));
+    last = m.index + t.length;
+  }
+  if (last < text.length) frag.append(text.slice(last));
+  return frag;
+}
+function markdown(src) {
+  const root = h("div", { class: "md" }), lines = String(src).replace(/\r\n?/g, "\n").split("\n");
+  const sep = s => s.includes("|") && s.includes("-") && /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(s);
+  const cells = s => { let t = s.trim(); if (t.startsWith("|")) t = t.slice(1); if (t.endsWith("|")) t = t.slice(0, -1); return t.split("|").map(c => c.trim()); };
+  const isTable = i => lines[i].includes("|") && i + 1 < lines.length && sep(lines[i + 1]);
+  const BUL = /^\s*([-*•])\s+(.*)$/, NUM = /^\s*\d+[.)]\s+(.*)$/, HEAD = /^\s{0,3}#{1,6}\s+(.*)$/;
+  let i = 0, m;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim()) { i++; continue; }
+    if ((m = line.match(HEAD))) { root.append(h("h4", {}, inline(m[1].replace(/#+\s*$/, "")))); i++; continue; }
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { root.append(h("hr")); i++; continue; }
+    if (isTable(i)) {
+      const head = cells(line), rows = []; i += 2;
+      while (i < lines.length && lines[i].trim() && lines[i].includes("|")) rows.push(cells(lines[i++]));
+      root.append(h("div", { class: "md-tbl" }, h("table", {},
+        h("thead", {}, h("tr", {}, head.map(c => h("th", { scope: "col" }, inline(c))))),
+        h("tbody", {}, rows.map(r => h("tr", {}, r.map(c => h("td", {}, inline(c)))))))));
+      continue;
+    }
+    if (BUL.test(line)) { const ul = h("ul"); while (i < lines.length && (m = lines[i].match(BUL))) { ul.append(h("li", {}, inline(m[2]))); i++; } root.append(ul); continue; }
+    if (NUM.test(line)) { const ol = h("ol"); while (i < lines.length && (m = lines[i].match(NUM))) { ol.append(h("li", {}, inline(m[1]))); i++; } root.append(ol); continue; }
+    const p = h("p"), start = i;
+    while (i < lines.length && lines[i].trim() && !HEAD.test(lines[i]) && !BUL.test(lines[i]) && !NUM.test(lines[i]) && !isTable(i)) {
+      if (i > start) p.append(h("br"));
+      p.append(inline(lines[i].trim())); i++;
+    }
+    if (i === start) { p.append(lines[i]); i++; }
+    root.append(p);
+  }
+  return root;
+}
+
+// ---------------------------------------------------------------- biểu đồ (Chart.js nạp trễ, ghim phiên bản + SRI) và bảng
 const CHART_JS = { src: "https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js", integrity: "sha384-vsrfeLOOY6KuIYKDlmVH5UiBmgIdB1oEf7p01YgWHuqmOHfZr374+odEv96n9tNC" };
 let chartLib = null;
 function loadChartJs() {
   if (window.Chart) return Promise.resolve(window.Chart);
   chartLib = chartLib || new Promise((resolve, reject) => {
-    const el = document.createElement("script");
-    el.src = CHART_JS.src; el.integrity = CHART_JS.integrity; el.crossOrigin = "anonymous"; el.referrerPolicy = "no-referrer";
-    el.onload = () => window.Chart ? resolve(window.Chart) : reject(new Error("no Chart"));
+    const el = h("script", { src: CHART_JS.src, integrity: CHART_JS.integrity, crossorigin: "anonymous", referrerpolicy: "no-referrer" });
+    el.onload = () => (window.Chart ? resolve(window.Chart) : reject(new Error("no Chart")));
     el.onerror = () => { chartLib = null; reject(new Error("load")); };
     document.head.appendChild(el);
   });
   return chartLib;
 }
-const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
-function drawChart(box, block) {
-  const cv = document.createElement("div"); cv.className = "cv";
-  const canvas = document.createElement("canvas");
-  canvas.setAttribute("role", "img");
-  canvas.setAttribute("aria-label", `Biểu đồ ${block.title}: ` + block.rows.map(r => `${r.label} ${vn(r.value / block.scale)} ${block.unit}`).join("; "));
-  cv.appendChild(canvas);
-  box.insertBefore(cv, box.querySelector(".tbl"));
+function tableEl(b) {
+  const k = b.kind, u = b.unit;
+  const head = k === "series" ? ["Kỳ", `Giá trị (${u})`, "Nguồn"] : k === "breakdown" ? ["Khoản mục", `Đóng góp (${u})`] : ["Kỳ", `Giá trị (${u})`];
+  const foot = [];
+  if (k === "comparison" && b.change != null) foot.push(["Thay đổi", signed(b.change / b.scale) + (b.growth != null ? ` (${signed(b.growth * 100)}%)` : "")]);
+  if (k === "breakdown" && b.change != null) foot.push(["Tổng chênh lệch", signed(b.change / b.scale)]);
+  return h("div", { class: "tbl" }, h("table", {},
+    h("thead", {}, h("tr", {}, head.map((t, i) => h("th", { class: i === 1 ? "n" : null, scope: "col", text: t })))),
+    h("tbody", {}, b.rows.map(r => h("tr", {},
+      h("td", { text: r.label }),
+      h("td", { class: "n", text: k === "breakdown" ? signed(r.value / b.scale) : vn(r.value / b.scale) }),
+      k === "series" ? h("td", { text: r.source ? `${docName(r.source.doc)} · trang PDF ${r.source.page}` : "" }) : null))),
+    foot.length ? h("tfoot", {}, foot.map(f => h("tr", {}, h("td", { text: f[0] }), h("td", { class: "n", text: f[1] })))) : null));
+}
+function summaryEl(b) {
+  const m = b.summary;
+  if (!m) return null;
+  const t = x => `${x.label} (${vn(x.value / b.scale)} ${b.unit})`, bare = x => x.label.replace(/^tại /, "");
+  return h("p", { class: "note", text: `Cao nhất: ${t(m.max)}; thấp nhất: ${t(m.min)}; từ ${bare(m.first)} đến ${bare(m.last)}: ${signed(m.change / b.scale)} ${b.unit}` + (m.growth != null ? ` (${signed(m.growth * 100)}%)` : "") + "." });
+}
+function drawLine(box, b, before) {
+  const cv = h("div", { class: "cv" }), canvas = h("canvas", { role: "img",
+    "aria-label": `Biểu đồ đường ${b.title}: ` + b.rows.map(r => `${r.label} ${vn(r.value / b.scale)} ${b.unit}`).join("; ") });
+  cv.append(canvas); box.insertBefore(cv, before);
   loadChartJs().then(Chart => {
-    new Chart(canvas, {
-      type: "bar",
-      data: { labels: block.rows.map(r => r.period || r.label),
-              datasets: [{ label: block.unit, data: block.rows.map(r => +(r.value / block.scale).toFixed(1)), backgroundColor: cssVar("--accent"), borderRadius: 4 }] },
+    const ink = cssVar("--ink"), mute = cssVar("--mute"), line = cssVar("--line");
+    new Chart(canvas, { type: "line",
+      data: { labels: b.rows.map(r => r.period || r.label), datasets: [{ label: b.unit, data: b.rows.map(r => +(r.value / b.scale).toFixed(1)),
+        borderColor: ink, backgroundColor: ink, pointRadius: 4, pointHoverRadius: 6, borderWidth: 2, tension: 0 }] },
       options: { responsive: true, maintainAspectRatio: false, animation: false,
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${vn(c.parsed.y)} ${block.unit}` } } },
-        scales: { x: { ticks: { color: cssVar("--mute") }, grid: { display: false } },
-                  y: { ticks: { color: cssVar("--mute"), callback: v => vn(v, 0) }, grid: { color: cssVar("--line") },
-                       title: { display: true, text: block.unit, color: cssVar("--mute") } } } } });
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${vn(c.parsed.y)} ${b.unit}` } } },
+        scales: { x: { ticks: { color: mute }, grid: { display: false } },
+                  y: { ticks: { color: mute, callback: v => vn(v, 0) }, grid: { color: line }, title: { display: true, text: b.unit, color: mute } } } } });
   }).catch(() => {
-    cv.remove();
-    const n = document.createElement("p"); n.className = "cv-note"; n.textContent = "Không tải được thư viện vẽ biểu đồ; số liệu xem ở bảng bên dưới.";
-    box.insertBefore(n, box.querySelector(".tbl"));
+    cv.replaceWith(h("p", { class: "note", text: "Không tải được thư viện vẽ biểu đồ; số liệu xem ở bảng bên dưới." }));
   });
 }
-
-function tableHtml(block) {
-  const u = block.unit, k = block.kind;
-  const head = k === "series" ? `<th>Kỳ</th><th class="n">Giá trị (${esc(u)})</th><th>Nguồn</th>`
-             : k === "breakdown" ? `<th>Khoản mục</th><th class="n">Đóng góp (${esc(u)})</th>`
-             : `<th>Kỳ</th><th class="n">Giá trị (${esc(u)})</th>`;
-  const body = block.rows.map(r => {
-    const num = k === "breakdown" ? signed(r.value / block.scale) : vn(r.value / block.scale);
-    const src = k === "series" ? `<td>${r.source ? esc(`${r.source.doc} · trang PDF ${r.source.page}`) : ""}</td>` : "";
-    return `<tr><td>${esc(r.label)}</td><td class="n">${num}</td>${src}</tr>`;
-  }).join("");
-  let foot = "";
-  if (k === "comparison" && block.change != null)
-    foot = `<tr><td>Thay đổi</td><td class="n">${signed(block.change / block.scale)}${block.growth != null ? ` (${signed(block.growth * 100)}%)` : ""}</td></tr>`;
-  if (k === "breakdown" && block.change != null)
-    foot = `<tr><td>Tổng chênh lệch</td><td class="n">${signed(block.change / block.scale)}</td></tr>`;
-  return `<div class="tbl"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody>${foot ? `<tfoot>${foot}</tfoot>` : ""}</table></div>`;
-}
-
-function summaryHtml(b) {
-  const m = b.summary;
-  if (!m) return "";
-  const t = x => `${esc(x.label)} (${vn(x.value / b.scale)} ${esc(b.unit)})`;
-  const bare = x => esc(x.label.replace(/^tại /, ""));                          // "tại ngày 30/6/2026" -> "ngày 30/6/2026"
-  const trend = `từ ${bare(m.first)} đến ${bare(m.last)}: ${signed(m.change / b.scale)} ${esc(b.unit)}` + (m.growth != null ? ` (${signed(m.growth * 100)}%)` : "");
-  return `<p class="cv-note">Cao nhất: ${t(m.max)}; thấp nhất: ${t(m.min)}; ${trend}.</p>`;
-}
-
 function chartsEl(blocks) {
   if (!blocks || !blocks.length) return null;
-  const wrap = document.createElement("div"); wrap.className = "charts";
-  blocks.forEach(b => {
-    const box = document.createElement("div"); box.className = "chartbox";
-    box.innerHTML = `<h3>${esc(b.title)}</h3>` + summaryHtml(b) + tableHtml(b);
-    wrap.appendChild(box);
-    if (b.chart && b.rows.length >= 2) drawChart(box, b);
+  return h("div", { class: "charts" }, blocks.map(b => {
+    const tbl = tableEl(b), box = h("div", { class: "chartbox" }, h("h3", { text: b.title }), summaryEl(b), tbl);
+    if (b.chart && b.rows.length >= 2) drawLine(box, b, tbl);          // một kỳ thì không vẽ
+    return box;
+  }));
+}
+
+// ---------------------------------------------------------------- nguồn dẫn chứng
+function sourcesEl(list) {
+  if (!list || !list.length) return null;
+  const ul = h("ul");
+  list.forEach(s => {
+    const page = s.page != null ? s.page : "không rõ";
+    const img = typeof s.image === "string" && /^\/pages\/[\w-]+\/\d+\.webp$/.test(s.image) ? s.image : null;
+    const url = typeof s.url === "string" && /^https:\/\//.test(s.url) ? s.url : null;
+    const boxes = (s.boxes || []).filter(b => Array.isArray(b) && b.length === 4 && b.every(Number.isFinite));
+    ul.append(h("li", {},
+      h("div", { class: "src-h", text: `${docName(s.doc)} · ${STATEMENTS[s.statement] || s.statement || "Thuyết minh"} · trang PDF ${page}` }),
+      s.rows && s.rows.length ? h("div", { class: "src-rows", text: s.rows.join("; ") }) : null,
+      url ? h("div", { class: "src-links" }, h("a", { href: url, target: "_blank", rel: "noopener noreferrer" }, s.is_pdf ? "Mở PDF chính thức" : "Mở trang báo cáo Vinamilk", " ", icon("ext"))) : null,
+      img ? h("details", { class: "pgd" }, h("summary", { text: "Xem trang PDF dẫn chứng" }),
+        h("a", { class: "pg", href: img, target: "_blank", rel: "noopener noreferrer", "aria-label": `Mở ảnh trang ${page} của ${docName(s.doc)} trong tab mới` },
+          h("img", { src: img, loading: "lazy", alt: `Trang ${page} của báo cáo ${docName(s.doc)}${boxes.length ? ", dòng được trích dẫn có khung đỏ" : ""}` }),
+          boxes.map(b => h("span", { class: "hl", style: `left:${b[0] * 100}%;top:${b[1] * 100}%;width:${b[2] * 100}%;height:${b[3] * 100}%` })))) : null));
   });
+  return h("details", { class: "srcs" }, h("summary", {}, icon("file"), `Nguồn · ${list.length}`), ul);
+}
+
+// ---------------------------------------------------------------- trạng thái
+let convs = store.get(KEY.convs, []).filter(c => c && Array.isArray(c.msgs));
+let cur = convs.find(c => c.id === store.get(KEY.active, null)) || null;
+let period = store.get(KEY.period, PERIODS[0]);
+if (period !== ALL && !PERIODS.includes(period)) period = PERIODS[0];
+let busy = false, ctrl = null;
+convs.forEach(c => c.msgs.forEach(m => { if (m.pending) { delete m.pending; m.error = "Phiên trước bị ngắt giữa chừng."; } }));
+
+function persist() {
+  convs.sort((a, b) => b.updated - a.updated);
+  convs = convs.slice(0, 40);
+  while (!store.set(KEY.convs, convs) && convs.length > 1) convs.pop();      // đầy bộ nhớ trình duyệt: bỏ cuộc cũ nhất
+  store.set(KEY.active, cur ? cur.id : null);
+}
+function setTitle() { $("top-title").textContent = cur ? cur.title : "Cuộc trò chuyện mới"; }
+
+// ---------------------------------------------------------------- hiển thị tin nhắn
+function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+  return new Promise((res, rej) => {
+    const t = h("textarea", { class: "sr", "aria-hidden": "true" }); t.value = text; document.body.append(t); t.select();
+    try { document.execCommand("copy") ? res() : rej(); } catch (e) { rej(e); } finally { t.remove(); }
+  });
+}
+function sendFeedback(bar, msg, label) {
+  const btns = bar.querySelectorAll(".fb"), note = bar.querySelector(".thanks");
+  btns.forEach(b => (b.disabled = true));
+  fetch("/api/feedback", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question: msg.question.slice(0, 500), answer: msg.text.slice(0, 8000), label, timestamp: new Date().toISOString() }) })
+    .then(r => { if (!r.ok) throw new Error("fb"); note.textContent = "Cảm ơn bạn đã phản hồi."; })
+    .catch(() => { btns.forEach(b => (b.disabled = false)); note.textContent = "Chưa gửi được phản hồi, bạn bấm lại nhé."; });
+}
+function botEl(msg, isLast) {
+  const wrap = h("div", { class: "msg bot" });
+  if (msg.pending) { wrap.append(h("div", { class: "typing", role: "status" }, "Đang tra cứu", h("i"), h("i"), h("i"))); return wrap; }
+  if (msg.error) {
+    wrap.append(h("div", { class: "errbox", role: "alert" }, h("div", { text: msg.error }),
+      h("button", { class: "btn", type: "button", onclick: () => retry(msg) }, icon("redo"), "Thử lại")));
+    return wrap;
+  }
+  wrap.append(markdown(msg.text));
+  if (msg.unsupported && msg.unsupported.length)
+    wrap.append(h("div", { class: "warn", role: "note" }, "Các số sau trong câu trả lời ", h("strong", { text: "không khớp" }), ` kết quả tra cứu, hãy kiểm tra lại: ${msg.unsupported.join(", ")}`));
+  (msg.warnings || []).forEach(w => wrap.append(h("div", { class: "warn", role: "note", text: w })));
+  const ch = chartsEl(msg.charts); if (ch) wrap.append(ch);
+  const src = sourcesEl(msg.sources); if (src) wrap.append(src);
+  const copy = h("button", { class: "act", type: "button", title: "Sao chép câu trả lời" }, icon("copy"), "Sao chép");
+  copy.onclick = () => copyText(msg.text).then(() => {
+    copy.replaceChildren(icon("check"), "Đã sao chép");
+    setTimeout(() => copy.replaceChildren(icon("copy"), "Sao chép"), 1500);
+  }).catch(() => {});
+  const bar = h("div", { class: "actions" }, copy,
+    isLast ? h("button", { class: "act", type: "button", title: "Tạo lại câu trả lời", onclick: () => retry(msg) }, icon("redo"), "Tạo lại") : null,
+    h("button", { class: "act icon-only fb", type: "button", "aria-label": "Câu trả lời hữu ích", title: "Hữu ích", onclick: () => sendFeedback(bar, msg, "up") }, icon("thumb-up")),
+    h("button", { class: "act icon-only fb", type: "button", "aria-label": "Câu trả lời chưa hữu ích", title: "Chưa hữu ích", onclick: () => sendFeedback(bar, msg, "down") }, icon("thumb-down")),
+    h("span", { class: "thanks", "aria-live": "polite" }));
+  wrap.append(bar);
   return wrap;
 }
-
-// ---- phản hồi 👍/👎 (chỉ gửi câu hỏi, câu trả lời, nhãn, thời điểm)
-function feedbackEl(question, answer) {
-  const bar = document.createElement("div"); bar.className = "fb";
-  bar.innerHTML = `<span>Câu trả lời có hữu ích không?</span>
-    <button type="button" data-l="up" aria-label="Hữu ích" title="Hữu ích">👍</button>
-    <button type="button" data-l="down" aria-label="Chưa hữu ích" title="Chưa hữu ích">👎</button>`;
-  bar.querySelectorAll("button").forEach(btn => btn.onclick = async () => {
-    bar.querySelectorAll("button").forEach(x => x.disabled = true);
-    try {
-      const r = await fetch("/api/feedback", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, answer: answer.slice(0, 8000), label: btn.dataset.l, timestamp: new Date().toISOString() }) });
-      if (!r.ok) throw new Error("feedback");
-      bar.textContent = "Cảm ơn bạn đã phản hồi.";
-    } catch (_) {
-      bar.querySelectorAll("button").forEach(x => x.disabled = false);
-      bar.querySelector("span").textContent = "Chưa gửi được phản hồi, bạn bấm lại nhé.";
-    }
-  });
-  return bar;
+function msgEl(msg, i) {
+  return msg.role === "user" ? h("div", { class: "msg user" }, h("div", { class: "bubble", text: msg.text })) : botEl(msg, i === cur.msgs.length - 1);
+}
+function scrollEnd() { const s = $("scroll"); s.scrollTop = s.scrollHeight; }
+function renderConv() {
+  const log = $("log"); log.replaceChildren();
+  $("welcome").hidden = !!(cur && cur.msgs.length);
+  if (cur) cur.msgs.forEach((m, i) => log.append(msgEl(m, i)));
+  setTitle(); scrollEnd();
 }
 
-async function ask(question) {
-  if (busy || !question.trim()) return;
-  busy = true; $("send").disabled = true;
-  add("user", esc(question));
-  const wait = add("", "Đang tra cứu…");
+// ---------------------------------------------------------------- gửi câu hỏi
+function contextual(q) { return period === ALL ? q : `${q}\n(Nếu không nêu kỳ, hiểu là kỳ ${period}.)`; }
+function historyFor(upto) {                                    // chỉ các cặp hỏi-đáp văn bản đã hoàn tất, tối đa 12 lượt
+  const out = [];
+  for (let i = 0; i < upto - 1; i++) {
+    const u = cur.msgs[i], b = cur.msgs[i + 1];
+    if (u.role === "user" && b && b.role === "bot" && b.text && !b.error) out.push({ role: "user", text: u.text.slice(0, 4000) }, { role: "model", text: b.text.slice(0, 4000) });
+  }
+  return out.slice(-12);
+}
+function fail(status, data) {
+  const d = typeof data.detail === "string" ? data.detail : "";
+  if (status === 429) return d || "Trợ lý đang tạm hết lượt sử dụng. Bạn thử lại sau ít phút nhé.";
+  if (status === 422) return "Câu hỏi chưa hợp lệ (tối đa 500 ký tự). Bạn rút gọn rồi thử lại nhé.";
+  if (status === 503) return "Trợ lý chưa sẵn sàng (có thể thiếu khóa Gemini). Bạn vẫn có thể dùng mục Tra cứu số liệu ở thanh bên.";
+  return d || "Đã có sự cố khi xử lý yêu cầu. Bạn thử lại sau ít phút nhé.";
+}
+function setBusy(on) {
+  busy = on;
+  const send = $("send");
+  send.replaceChildren(icon(on ? "stop" : "up"));
+  send.setAttribute("aria-label", on ? "Dừng trả lời" : "Gửi câu hỏi");
+  send.disabled = on ? false : !$("q").value.trim();
+}
+async function ask(question, regen) {
+  question = question.trim();
+  if (busy || !question) return;
+  if (!cur) {
+    cur = { id: uid(), title: question.length > 40 ? question.slice(0, 40).trim() + "…" : question, updated: Date.now(), msgs: [] };
+    convs.unshift(cur);
+  }
+  if (!regen) cur.msgs.push({ role: "user", text: question });
+  const bot = { role: "bot", pending: true, question };
+  cur.msgs.push(bot);
+  cur.updated = Date.now();
+  renderConv(); renderRecent(); setBusy(true);
+  ctrl = new AbortController();
+  const idx = cur.msgs.length - 1;
   try {
-    const r = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, history }) });
+    const r = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, signal: ctrl.signal,
+      body: JSON.stringify({ question: contextual(question), history: historyFor(idx) }) });
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.detail || "Đã có sự cố khi xử lý yêu cầu. Bạn thử lại sau nhé.");
-    let html = fmt(data.answer);
-    if (data.unsupported_numbers && data.unsupported_numbers.length)
-      html += `<div class="warn">Các số sau trong câu trả lời <strong>không khớp</strong> kết quả tra cứu, hãy kiểm tra lại: ${esc(data.unsupported_numbers.join(", "))}</div>`;
-    (data.warnings || []).forEach(w => { html += `<div class="warn">${esc(w)}</div>`; });
-    wait.innerHTML = html;
-    const ch = chartsEl(data.charts);
-    if (ch) wait.appendChild(ch);
-    wait.insertAdjacentHTML("beforeend", sourcesHtml(data.sources));
-    wait.appendChild(feedbackEl(question, data.answer));
-    history.push({ role: "user", text: question }, { role: "model", text: data.answer });
-    history = history.slice(-12);
+    if (!r.ok) throw Object.assign(new Error(fail(r.status, data)), { http: r.status });
+    delete bot.pending;
+    Object.assign(bot, { text: data.answer, sources: data.sources || [], charts: data.charts || [], warnings: data.warnings || [], unsupported: data.unsupported_numbers || [] });
   } catch (e) {
-    wait.className = "msg err";
-    wait.textContent = e.message;
-  } finally { busy = false; $("send").disabled = false; }
-}
-
-EXAMPLES.forEach(q => {
-  const b = document.createElement("button");
-  b.type = "button"; b.className = "chip"; b.textContent = q;
-  b.onclick = () => ask(q);
-  $("chips").appendChild(b);
-});
-$("chat-form").onsubmit = e => { e.preventDefault(); const q = $("q").value; $("q").value = ""; ask(q); };
-$("reset").onclick = () => { history = []; $("log").innerHTML = ""; };
-
-$("lookup-form").onsubmit = async e => {
-  e.preventDefault();
-  $("lookup-out").textContent = "Đang tra…";
-  try {
-    const r = await fetch("/api/lookup", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ metric: $("metric").value, period: $("period").value, basis: $("basis").value }) });
-    const data = await r.json().catch(() => ({}));
-    $("lookup-out").textContent = r.ok ? data.text : (data.detail || "Không tra được, thử lại sau.");
-  } catch (_) { $("lookup-out").textContent = "Không tra được, thử lại sau."; }
-};
-
-
-function pick(which) {
-  for (const k of ["chat", "lookup"]) {
-    $("t-" + k).setAttribute("aria-selected", String(k === which));
-    $("p-" + k).hidden = k !== which;
+    delete bot.pending;
+    bot.error = e.name === "AbortError" ? "Đã dừng trả lời." : e.http ? e.message : "Không kết nối được tới máy chủ. Bạn kiểm tra mạng rồi thử lại nhé.";
+    if (e.http === 503) refreshHealth();
+  } finally {
+    ctrl = null; cur.updated = Date.now(); persist(); setBusy(false); renderConv(); renderRecent();
   }
 }
-$("t-chat").onclick = () => pick("chat");
-$("t-lookup").onclick = () => pick("lookup");
+function retry(msg) {                                          // bỏ câu trả lời cũ rồi hỏi lại đúng câu hỏi đó
+  if (busy) return;
+  const i = cur.msgs.indexOf(msg);
+  if (i < 0) return;
+  cur.msgs.splice(i, 1);
+  ask(msg.question, true);
+}
+
+// ---------------------------------------------------------------- thanh bên: cuộc trò chuyện gần đây
+function renderRecent() {
+  const ul = $("recent"); ul.replaceChildren();
+  if (!convs.length) { ul.append(h("li", { class: "recent-empty", text: "Chưa có cuộc trò chuyện nào" })); return; }
+  [...convs].sort((a, b) => b.updated - a.updated).slice(0, 30).forEach(c => {
+    const li = h("li", { class: "conv" + (cur && cur.id === c.id ? " active" : "") });
+    const open = h("button", { class: "conv-title", type: "button", text: c.title, title: c.title, onclick: () => openConv(c), "aria-current": cur && cur.id === c.id ? "true" : null });
+    const rename = h("button", { class: "conv-act", type: "button", "aria-label": `Đổi tên cuộc trò chuyện ${c.title}`, title: "Đổi tên", onclick: () => startRename(li, c) }, icon("edit"));
+    const del = h("button", { class: "conv-act", type: "button", "aria-label": `Xóa cuộc trò chuyện ${c.title}`, title: "Xóa" }, icon("trash"));
+    let timer = null;
+    del.onclick = () => {                                       // hai bước, không dùng confirm() của trình duyệt
+      if (!del.classList.contains("confirm")) {
+        del.classList.add("confirm"); del.textContent = "Xóa?"; del.setAttribute("aria-label", "Bấm lần nữa để xóa");
+        timer = setTimeout(() => renderRecent(), 3000); return;
+      }
+      clearTimeout(timer); removeConv(c);
+    };
+    li.append(open, rename, del); ul.append(li);
+  });
+}
+function startRename(li, c) {
+  const input = h("input", { type: "text", value: c.title, maxlength: "80", "aria-label": "Tên cuộc trò chuyện" });
+  let done = false;
+  const finish = save => {
+    if (done) return; done = true;
+    const t = input.value.trim();
+    if (save && t) { c.title = t; persist(); setTitle(); }
+    renderRecent();
+  };
+  input.onkeydown = e => { if (e.key === "Enter") finish(true); else if (e.key === "Escape") finish(false); };
+  input.onblur = () => finish(true);
+  li.replaceChildren(input); input.focus(); input.select();
+}
+function removeConv(c) {
+  convs = convs.filter(x => x !== c);
+  if (cur === c) { cur = null; renderConv(); }
+  persist(); renderRecent();
+}
+function openConv(c) { if (busy) return; cur = c; persist(); showView("chat"); renderConv(); renderRecent(); closeSide(); }
+function newChat() { if (busy) return; cur = null; persist(); showView("chat"); renderConv(); renderRecent(); closeSide(); $("q").focus(); }
+
+// ---------------------------------------------------------------- điều hướng, ngăn kéo, kỳ báo cáo
+function showView(name) {
+  ["chat", "lookup"].forEach(v => ($("view-" + v).hidden = v !== name));
+  document.querySelectorAll(".nav-item[data-view]").forEach(b => (b.getAttribute("data-view") === name ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")));
+  if (name === "lookup") $("top-title").textContent = "Tra cứu số liệu"; else setTitle();
+  closeSide();
+}
+const mobile = window.matchMedia("(max-width:900px)");
+function syncSide() { const open = $("side").classList.contains("open"); $("side").inert = mobile.matches && !open; $("open-side").setAttribute("aria-expanded", String(open)); }
+function openSide() { $("side").classList.add("open"); $("scrim").classList.add("show"); syncSide(); $("new-chat").focus(); }
+function closeSide() { $("side").classList.remove("open"); $("scrim").classList.remove("show"); syncSide(); }
+mobile.addEventListener("change", syncSide);
+
+function applyPeriod() {
+  $("period-label").textContent = period === ALL ? "Tất cả kỳ" : period;
+  $("desc-period").textContent = periodLabel(period);
+  $("ctx").textContent = (period === ALL ? "Tất cả kỳ" : `Kỳ ${period}`) + " · Báo cáo hợp nhất · Tool + RAG";
+  $("period-menu").querySelectorAll("button").forEach(b => b.setAttribute("aria-checked", String(b.dataset.p === period)));
+  store.set(KEY.period, period);
+}
+function buildPeriodMenu() {
+  const menu = $("period-menu");
+  [...PERIODS, ALL].forEach(p => {
+    const b = h("button", { type: "button", role: "menuitemradio", "data-p": p, "aria-checked": "false", onclick: () => { period = p; applyPeriod(); closeMenu(); $("period-btn").focus(); } },
+      h("span", { text: p === ALL ? "Tất cả kỳ" : p }));
+    menu.append(h("li", { role: "none" }, b));
+  });
+}
+function closeMenu() { $("period-menu").hidden = true; $("period-btn").setAttribute("aria-expanded", "false"); }
+$("period-btn").onclick = () => {
+  const menu = $("period-menu"), open = menu.hidden;
+  menu.hidden = !open; $("period-btn").setAttribute("aria-expanded", String(open));
+  if (open) (menu.querySelector('[aria-checked="true"]') || menu.querySelector("button")).focus();
+};
+$("period-menu").onkeydown = e => {
+  const items = [...$("period-menu").querySelectorAll("button")], i = items.indexOf(document.activeElement);
+  if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+  else if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+};
+document.addEventListener("click", e => { if (!e.target.closest(".pill-wrap")) closeMenu(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") { closeMenu(); closeSide(); } });
+
+// ---------------------------------------------------------------- trạng thái hệ thống
+function setDot(id, ok, text) { $("dot-" + id).className = "dot " + (ok ? "ok" : "bad"); $("val-" + id).textContent = text; }
+async function refreshHealth() {
+  try {
+    const d = await (await fetch("/api/health")).json();
+    setDot("db", d.ok === true, d.ok === true ? `${PERIODS.length} kỳ` : "lỗi");
+    setDot("ai", d.ok === true && d.gemini_key === true, d.ok === true && d.gemini_key === true ? "sẵn sàng" : "lỗi");
+  } catch (_) { setDot("db", false, "lỗi"); setDot("ai", false, "lỗi"); }
+}
+
+// ---------------------------------------------------------------- tra cứu số liệu
+$("lookup-form").onsubmit = async e => {
+  e.preventDefault();
+  const out = $("lk-out"); out.textContent = "Đang tra…";
+  try {
+    const r = await fetch("/api/lookup", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ metric: $("lk-metric").value, period: $("lk-period").value, basis: $("lk-basis").value }) });
+    const data = await r.json().catch(() => ({}));
+    out.textContent = r.ok ? (data.text || "Không có số liệu.") : r.status === 429 ? (data.detail || "Bạn thao tác hơi nhanh, thử lại sau ít phút.") : "Không tra được, bạn thử lại sau nhé.";
+  } catch (_) { out.textContent = "Không kết nối được tới máy chủ. Bạn kiểm tra mạng rồi thử lại nhé."; }
+};
+
+// ---------------------------------------------------------------- khởi tạo
+SUGGESTIONS.forEach(([tag, text]) => $("cards").append(h("button", { class: "card-btn", type: "button", onclick: () => ask(text) }, h("span", { class: "tag", text: tag }), h("span", { text }))));
+$("stats").append(h("span", {}, h("b", { text: String(PERIODS.length) }), " kỳ báo cáo"));          // chỉ số đếm được từ chính giao diện; chưa có API thống kê khác
+buildPeriodMenu();
+PERIODS.forEach(p => $("lk-period").append(h("option", { value: p, text: p, selected: p === PERIODS[0] })));
+document.querySelectorAll(".nav-item[data-view]").forEach(b => (b.onclick = () => showView(b.getAttribute("data-view"))));
+$("new-chat").onclick = newChat;
+$("open-side").onclick = openSide;
+$("scrim").onclick = closeSide;
+
+const input = $("q");
+function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 160) + "px"; if (!busy) $("send").disabled = !input.value.trim(); }
+input.addEventListener("input", autosize);
+input.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); $("composer").requestSubmit(); }   // không gửi khi đang gõ dấu tiếng Việt
+});
+$("composer").onsubmit = e => {
+  e.preventDefault();
+  if (busy) { if (ctrl) ctrl.abort(); return; }
+  const text = input.value; input.value = ""; autosize(); ask(text);
+};
+
+applyPeriod(); renderConv(); renderRecent(); syncSide(); refreshHealth();
 </script>
 </body>
 </html>

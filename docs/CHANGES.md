@@ -33,6 +33,39 @@ Tài liệu cho nhóm cập nhật báo cáo (mục 2.4.2, 2.5.4 và Chương 3)
   429 khi gửi quá nhanh (bộ đếm riêng, không trừ vào lượt hỏi), 502 khi nơi lưu lỗi (log chỉ ghi tên loại lỗi). Bản ghi không có IP, tiêu đề hay khóa.
 - `public/index.html`: nút 👍/👎 dưới mỗi câu trả lời, bấm xong hiện lời cảm ơn; lỗi mạng thì cho bấm lại.
 
+## 4. Thiết kế lại giao diện (nhánh `feature/redesign-ui`) – gợi ý cho mục 2.5.4
+
+- `public/index.html` viết lại theo bố cục hai cột; bản cũ giữ ở `public/index.old.html`. **CSS và JS nằm trong chính `index.html`** (không tách `styles.css`/`app.js`)
+  vì `api/index.py` chỉ có route `/` và không được đổi backend; tách tệp thì chạy cục bộ bằng uvicorn sẽ không tải được. Trên Vercel tách được nếu muốn.
+- Thanh bên: thương hiệu, "Cuộc trò chuyện mới", 5 mục menu (Trò chuyện, Tra cứu số liệu hoạt động; 3 mục còn lại "Sắp có" vì chưa có API), "GẦN ĐÂY" trong `localStorage`
+  (đổi tên, xóa hai bước không dùng `confirm()`), chỉ báo DuckDB/Gemini từ `/api/health`.
+- Thanh trên: tiêu đề cuộc trò chuyện (rút gọn từ câu hỏi đầu) và chọn kỳ (Q2/2026 … Q1/2025, Tất cả kỳ). Kỳ chỉ được thêm vào câu hỏi như gợi ý ngữ cảnh
+  ("Nếu không nêu kỳ, hiểu là kỳ …"); lịch sử và hiển thị vẫn dùng câu hỏi gốc.
+- Hội thoại: markdown an toàn tự dựng bằng DOM (đoạn, danh sách, đậm, nghiêng, mã, bảng; thẻ HTML trong câu trả lời hiện như chữ, không chạy), thẻ "Nguồn" thu gọn
+  với ảnh trang PDF có khung đỏ, biểu đồ đường Chart.js 4.4.7 (ghim + SRI) kèm bảng khi có từ 2 kỳ, nút Sao chép, Tạo lại, 👍/👎 (biểu tượng SVG),
+  nút Dừng (AbortController), lỗi 429/503/5xx/mất mạng có nút "Thử lại". Enter gửi, Shift+Enter xuống dòng, không gửi khi đang gõ dấu (IME).
+- Responsive: dưới 900 px thanh bên thành ngăn kéo (`inert` khi đóng), lưới 1 cột, ô nhập dùng `dvh`; chế độ tối theo `prefers-color-scheme`; tôn trọng `prefers-reduced-motion`.
+- Không đổi backend, `guard.py` hay dữ liệu. Chuỗi "Chatbot BCTC Vinamilk" được giữ trong `meta description` để test `test_health_and_static_page` (kiểm tra chuỗi này) vẫn đạt, tiêu đề tab là "Chatbot Phân Tích Tài Chính".
+
+### Kiểm tra giao diện (Chrome headless, Gemini thật, máy chủ cục bộ)
+Chạy ở 1440 px (sáng và tối), 768 px và 390 px (sáng): màn hình chào đúng chữ; chọn kỳ cập nhật mô tả và dòng phụ; hỏi bằng thẻ gợi ý nhận trả lời kèm nguồn, mở đúng ảnh trang PDF (q2-2026/11) có 1 khung đỏ;
+câu xu hướng vẽ biểu đồ đường đủ 6 kỳ và bảng 6 dòng, câu một kỳ không vẽ; tải lại trang khôi phục hội thoại (cả biểu đồ); đổi tên, mở lại, xóa hai bước; giả lập 429, 503, dừng giữa chừng,
+mất mạng (đều có "Thử lại", bấm lại hỏi được thật); câu trả lời dài có bảng, danh sách, mã; thẻ `<script>` và `<img onerror>` trong câu trả lời không chạy; chỉ báo Gemini đỏ khi `gemini_key=false`;
+Tra cứu số liệu; không tràn ngang ở 390 và 768 px; console không có lỗi (ngoài lỗi mạng chủ động tạo khi giả lập ngoại tuyến).
+Lighthouse (trang chào, máy tính để bàn): Accessibility 100, Best Practices 100, Performance 100.
+Cả 6 thẻ gợi ý và một câu ngoài phạm vi được hỏi thật qua API với phần gợi ý kỳ: 6 câu trả lời được, câu ngoài phạm vi vẫn bị từ chối.
+
+### Nhóm cần xác nhận
+1. **Ảnh mẫu không được đính kèm** trong yêu cầu, chỉ có mô tả chữ; bố cục làm theo mô tả, chưa đối chiếu được với ảnh thật.
+2. **Màu nhấn:** chọn đen (xám đậm `#111418`, chế độ tối đảo thành sáng); đổi sang xanh dương đậm chỉ cần sửa `--accent`.
+3. **Hàng số liệu:** chỉ còn "6 kỳ báo cáo" vì chưa có API trả số chỉ tiêu, số đoạn thuyết minh, số trang PDF; đếm ở trình duyệt không được. Muốn đủ 4 số cần thêm endpoint thống kê (đụng backend, chưa làm).
+4. **Chỉ báo "DuckDB 6 kỳ"** hiện xanh khi `/api/health` trả `ok`, nhưng `/api/health` hiện không kiểm tra riêng DuckDB.
+5. **Ghi chú số suy ra/đã sửa OCR** trong thẻ Nguồn chưa hiển thị được: `/api/ask` không trả `notes` (chỉ có `warnings`). Câu trả lời của mô hình thường tự nêu lưu ý này trong văn bản.
+6. **Nguồn của câu xu hướng:** `get_series` không trả `sources` cấp cao nên thẻ "Nguồn" trống; nguồn từng kỳ nằm trong cột "Nguồn" của bảng.
+7. **Thẻ gợi ý số 6 (khoản vay):** trả lời được nhưng đôi khi mô hình tự cộng vay ngắn hạn và dài hạn (8.454,9 tỷ), con số này bị `guard.py` cảnh báo "không khớp" dù đúng số học. Nên cân nhắc bổ sung chỉ tiêu "tổng nợ vay" hoặc đổi câu.
+8. **Mục menu "Sắp có":** Thuyết minh & nguồn, Xu hướng & so sánh, Thống kê (cần thêm API). Có xóa `public/index.old.html` hay không.
+9. **Ảnh trang PDF** chỉ hiện khi tệp tĩnh `public/pages` được phục vụ (Vercel làm việc này; chạy `uvicorn api.index:app` thuần thì ảnh trả 404 như trước đây). Để thử cục bộ, có thể mount thêm `/pages` trong một tệp chạy riêng.
+
 ## Kiểm thử
 
 | Bộ test | Trước | Sau |
