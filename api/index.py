@@ -8,6 +8,7 @@ import os
 import sys
 import time
 from collections import defaultdict, deque
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,6 +20,8 @@ from google.genai import types  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
 from src.agent import AgentConfigError, VinamilkAgent  # noqa: E402
+from src.agent.charts import build_charts  # noqa: E402
+from src.feedback import get_store, make_record  # noqa: E402
 from src.tools.registry import call_tool  # noqa: E402
 
 OFFICIAL_REPORTS_URL = "https://www.vinamilk.com.vn/investor/reports/financial"
@@ -27,12 +30,14 @@ OFFICIAL_PDF_URLS = {
     "q2-2026": "https://d8um25gjecm9v.cloudfront.net/cms/20260730_VNM_BCTC_da_soat_xet_Q2_2026_Hop_nhat_76ef2e29c1.pdf",
 }
 RATE_PER_MINUTE = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "6"))
+FEEDBACK_PER_MINUTE = int(os.environ.get("FEEDBACK_LIMIT_PER_MINUTE", "20"))
 MAX_HISTORY_TURNS = int(os.environ.get("MAX_HISTORY_TURNS", "6"))
 MAX_QUESTION_CHARS = 500
 
 app = FastAPI(title="Chatbot BCTC Vinamilk")
 _agent: VinamilkAgent | None = None
 _hits: dict[str, deque] = defaultdict(deque)          # IP -> thời điểm các lần hỏi gần đây (chỉ có tác dụng trong một phiên bản hàm đang chạy)
+_fb_hits: dict[str, deque] = defaultdict(deque)       # như trên, nhưng riêng cho phản hồi để không trừ vào lượt hỏi
 
 
 class Turn(BaseModel):
@@ -43,6 +48,13 @@ class Turn(BaseModel):
 class AskBody(BaseModel):
     question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
     history: list[Turn] = []
+
+
+class FeedbackBody(BaseModel):
+    question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
+    answer: str = Field(min_length=1, max_length=8000)
+    label: str = Field(pattern="^(up|down)$")
+    timestamp: datetime | None = None                  # thời điểm phía trình duyệt; bỏ trống thì dùng giờ máy chủ
 
 
 class LookupBody(BaseModel):
@@ -58,13 +70,14 @@ def get_agent() -> VinamilkAgent:
     return _agent
 
 
-def _rate_limit(request: Request) -> None:
+def _rate_limit(request: Request, hits: dict | None = None, limit: int | None = None, msg: str = "Bạn hỏi hơi nhanh, vui lòng thử lại sau ít phút.") -> None:
+    hits = _hits if hits is None else hits
     ip = (request.headers.get("x-forwarded-for") or (request.client.host if request.client else "?")).split(",")[0].strip()
-    q, now = _hits[ip], time.time()
+    q, now = hits[ip], time.time()                       # IP chỉ dùng làm khóa đếm trong bộ nhớ, không ghi ra đâu cả
     while q and now - q[0] > 60:
         q.popleft()
-    if len(q) >= RATE_PER_MINUTE:
-        raise HTTPException(429, "Bạn hỏi hơi nhanh, vui lòng thử lại sau ít phút.")
+    if len(q) >= (RATE_PER_MINUTE if limit is None else limit):
+        raise HTTPException(429, msg)
     q.append(now)
 
 
@@ -124,7 +137,18 @@ def ask(body: AskBody, request: Request):
             raise HTTPException(429, "Trợ lý đang tạm hết lượt sử dụng. Bạn thử lại sau hoặc dùng Tra số trực tiếp.")
         raise HTTPException(502, "Trợ lý đang bận hoặc gặp sự cố tạm thời. Bạn thử lại sau ít phút nhé.")
     return {"answer": r.answer, "sources": _source_links(r.sources), "warnings": r.warnings,
-            "unsupported_numbers": r.unsupported_numbers}
+            "unsupported_numbers": r.unsupported_numbers, "charts": build_charts(r.tool_calls)}
+
+
+@app.post("/api/feedback")
+def feedback(body: FeedbackBody, request: Request):
+    _rate_limit(request, _fb_hits, FEEDBACK_PER_MINUTE, "Bạn gửi phản hồi hơi nhanh, vui lòng thử lại sau ít phút.")
+    try:
+        get_store().save(make_record(body.question, body.answer, body.label, body.timestamp))
+    except Exception as e:                                                   # noqa: BLE001 - chỉ ghi loại lỗi, không ghi nội dung/URL/khóa
+        print(f"FEEDBACK_ERROR {type(e).__name__}", file=sys.stderr, flush=True)
+        raise HTTPException(502, "Chưa lưu được phản hồi, bạn thử lại sau nhé.")
+    return {"ok": True}
 
 
 @app.post("/api/lookup")

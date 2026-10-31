@@ -96,6 +96,26 @@ def test_unsupported_number_is_flagged():
     assert a.ask("q").unsupported_numbers == ["16.500"]
 
 
+def test_explain_change_numbers_pass_guard_and_invented_ones_are_flagged():
+    """Số trong phần phân rã (kể cả đóng góp từng khoản mục và tỷ trọng %) là hợp lệ; số mô hình tự thêm bị bắt."""
+    ok = ("LNST quý 2/2026 tăng 695,8 tỷ đồng (+28,0%) so với cùng kỳ: doanh thu thuần làm tăng 2.099,0 tỷ đồng, "
+          "giá vốn làm giảm 899,7 tỷ đồng, thuế làm giảm 107,3 tỷ đồng.")
+    a = agent([resp([call("explain_change", metric="lợi nhuận sau thuế", period="Q2/2026")]), resp([text(ok)])])
+    r = a.ask("Vì sao lợi nhuận Q2/2026 tăng?")
+    assert [t.name for t in r.tool_calls] == ["explain_change"] and r.tool_calls[0].ok
+    assert r.unsupported_numbers == [] and r.sources
+    bad = agent([resp([call("explain_change", metric="lợi nhuận sau thuế", period="Q2/2026")]),
+                 resp([text("Chi phí nguyên liệu làm giảm 1.234,5 tỷ đồng.")])])
+    assert bad.ask("q").unsupported_numbers == ["1.234,5"]
+
+
+def test_prompt_and_tool_declarations_mention_explain_change():
+    a = agent([])
+    decls = {d.name: d for d in a.config.tools[0].function_declarations}
+    assert "explain_change" in decls and set(decls["explain_change"].parameters_json_schema["properties"]) == {"metric", "period", "base", "basis"}
+    assert "explain_change" in SYSTEM_PROMPT and "không suy đoán" in SYSTEM_PROMPT
+
+
 def test_tool_error_is_reported_as_error_result():
     a = agent([resp([call("get_metric", metric="doanh thu thuần", period="Q3/2026")]),
                resp([text("Chưa có báo cáo quý 3/2026.")])])
