@@ -183,6 +183,7 @@ class Analyst:
         text += f" Nguồn: {_src_text(src)}."
         return {"ok": True, "text": text, "metric": m.key, "period": str(p), "kind": kind, "basis": basis,
                 "current": cur.value, "base": prev.value, "change": delta, "growth": pct,
+                "current_label": cur.description, "base_label": prev.description,
                 "sources": src, "notes": notes}
 
     # ================================================================ chuỗi

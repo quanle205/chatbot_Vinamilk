@@ -143,6 +143,50 @@ def test_tool_specs_are_valid_and_dispatchable():
     assert call_tool("search_metrics", {"text": "lãi ròng"})["matches"][0]["key"] == "loi_nhuan_sau_thue"
 
 
+def test_explain_change_contributions_sum_to_exact_difference():
+    """Mọi kỳ, cả hai cơ sở so sánh và hai chỉ tiêu: tổng đóng góp = chênh lệch (sai số tối đa 1 đồng)."""
+    checked = 0
+    for metric in ("loi_nhuan_sau_thue", "doanh_thu_thuan"):
+        for p in PERIODS:
+            for base, basis in (("yoy", "quy"), ("yoy", "luy_ke"), ("qoq", "quy")):
+                r = call_tool("explain_change", {"metric": metric, "period": str(p), "base": base, "basis": basis})
+                if not r["ok"]:                                     # Q1/2025 không có quý liền trước
+                    assert base == "qoq" and str(p) == "Q1/2025", (metric, p, base, r)
+                    continue
+                assert abs(sum(i["effect"] for i in r["items"]) - r["change"]) <= 1, (metric, p, base, basis)
+                assert r["change"] == r["current"] - r["base"]
+                assert not any(i["key"] == "khac" for i in r["items"]), "số liệu hiện có khớp đồng nhất thức, không cần dòng 'khác'"
+                checked += 1
+    assert checked >= 30
+
+
+def test_explain_change_matches_pdf_landmarks_and_signs():
+    r = call_tool("explain_change", {"metric": "lợi nhuận sau thuế", "period": "Q1/2026", "base": "yoy"})
+    assert r["ok"] and r["current"] == 2_458_221_002_532 == val("loi_nhuan_sau_thue", "Q1/2026")            # q1-2026.pdf tr.11
+    assert r["base"] == val("loi_nhuan_sau_thue", "Q1/2025") and r["current_label"] == "quý 1/2026"
+    by = {i["key"]: i for i in r["items"]}
+    assert by["doanh_thu"]["current"] == 16_148_657_871_623 and by["doanh_thu"]["effect"] == by["doanh_thu"]["current"] - by["doanh_thu"]["base"]
+    g = call_tool("get_growth", {"metric": "giá vốn", "period": "Q1/2026", "kind": "yoy"})                 # cùng cột "cùng kỳ" (đã phân loại lại) như get_growth
+    assert by["gia_von"]["effect"] == -(g["current"] - g["base"]) and by["gia_von"]["effect"] < 0         # chi phí tăng -> làm giảm lợi nhuận
+    assert by["thue_tndn"]["current"] == -(val("thue_tndn_hien_hanh", "Q1/2026") + val("thue_tndn_hoan_lai", "Q1/2026"))
+    assert r["sources"] and "Tổng các đóng góp bằng đúng chênh lệch" in r["text"] and "trang PDF" in r["text"]
+    rev = call_tool("explain_change", {"metric": "doanh thu", "period": "Q1/2026"})
+    assert rev["ok"] and rev["name"] == "doanh thu thuần" and [i["key"] for i in rev["items"]] == ["doanh_thu_gop", "giam_tru"]
+    g = call_tool("get_growth", {"metric": "giảm trừ doanh thu", "period": "Q1/2026", "kind": "yoy"})
+    assert rev["items"][1]["effect"] == -(g["current"] - g["base"])
+
+
+def test_explain_change_rejects_bad_requests_as_values():
+    for args in ({"metric": "tổng tài sản", "period": "Q1/2026"},                      # chỉ tiêu không hỗ trợ
+                 {"metric": "lợi nhuận sau thuế", "period": "Q1/2025", "base": "qoq"},     # không có quý trước
+                 {"metric": "lợi nhuận sau thuế", "period": "Q2/2026", "base": "qoq", "basis": "luy_ke"},
+                 {"metric": "lợi nhuận sau thuế", "period": "Q9/2030"},
+                 {"metric": "lợi nhuận sau thuế", "period": "Q1/2026", "base": "xyz"}):
+        r = call_tool("explain_change", args)
+        assert r["ok"] is False and r["error"], args
+    assert call_tool("explain_change", {"period": "Q1/2026"})["ok"] is False                 # thiếu tham số
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted(globals().items()):

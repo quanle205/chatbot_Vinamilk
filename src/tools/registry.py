@@ -38,6 +38,17 @@ TOOL_SPECS = [
      "description": "Chuỗi giá trị của một chỉ tiêu qua mọi kỳ có dữ liệu (Q1/2025 đến Q2/2026), để so sánh xu hướng.",
      "input_schema": {"type": "object", "required": ["metric"], "properties": {
          "metric": {"type": "string"}, "basis": _BASIS}}},
+    {"name": "explain_change",
+     "description": "Giải thích vì sao lợi nhuận sau thuế (hoặc doanh thu thuần) thay đổi giữa hai kỳ: phân rã chênh lệch theo "
+                    "khoản mục báo cáo kết quả kinh doanh (doanh thu, giá vốn, chi phí bán hàng, chi phí quản lý, hoạt động tài chính, "
+                    "thuế...). Mọi số do công cụ tính, tổng các đóng góp bằng đúng chênh lệch. Dùng cho câu hỏi 'vì sao tăng/giảm', "
+                    "'do đâu', 'yếu tố nào tác động'. Công cụ chỉ cho biết khoản mục nào đóng góp bao nhiêu, không cho biết nguyên nhân kinh doanh.",
+     "input_schema": {"type": "object", "required": ["metric", "period"], "properties": {
+         "metric": {"type": "string", "description": "'lợi nhuận sau thuế' hoặc 'doanh thu thuần'."},
+         "period": _PERIOD,
+         "base": {"type": "string", "enum": ["yoy", "qoq"], "default": "yoy",
+                  "description": "yoy = so với cùng kỳ năm trước; qoq = so với quý liền trước (chỉ với basis=quy)."},
+         "basis": _BASIS}}},
     {"name": "search_metrics",
      "description": "Tìm tên chỉ tiêu chuẩn từ cách gọi thông thường (vd 'lãi ròng' -> loi_nhuan_sau_thue).",
      "input_schema": {"type": "object", "required": ["text"], "properties": {"text": {"type": "string"}}}},
@@ -69,6 +80,9 @@ def call_tool(name: str, args: dict) -> dict:
             return a.growth(args["metric"], args["period"], args.get("kind", "yoy"), args.get("basis", "quy"))
         if name == "get_series":
             return a.series(args["metric"], args.get("basis", "quy"))
+        if name == "explain_change":
+            from .explain import explain_change
+            return explain_change(a, args["metric"], args["period"], args.get("base", "yoy"), args.get("basis", "quy"))
         if name == "search_metrics":
             return a.search_metrics(args["text"])
         if name == "calculate":
