@@ -1,7 +1,7 @@
 """API cho bản triển khai Vercel (hàm serverless). Giao diện là trang tĩnh public/index.html gọi các đường dẫn /api/*.
 
 Hàm serverless không giữ trạng thái giữa các lần gọi, nên lịch sử hội thoại do trình duyệt gửi lên mỗi lượt (chỉ dạng văn bản hỏi-đáp).
-Biến môi trường: GEMINI_API_KEY (bắt buộc cho /api/ask), GEMINI_MODEL, SESSION_LIMIT_PER_MINUTE, MAX_HISTORY_TURNS.
+Biến môi trường: GEMINI_API_KEY (bắt buộc cho /api/ask), GEMINI_MODEL, SESSION_LIMIT_PER_MINUTE, MAX_HISTORY_TURNS; phản hồi: FEEDBACK_WEBHOOK_URL, FEEDBACK_WEBHOOK_TOKEN, FEEDBACK_LIMIT_PER_MINUTE (xem src/feedback.py).
 """
 import json
 import os

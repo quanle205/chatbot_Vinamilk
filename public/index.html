@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Chatbot BCTC Vinamilk</title>
+<link rel="icon" href="data:,">
 <style>
   :root { --bg:#f7f8fa; --card:#fff; --ink:#1b2a38; --mute:#5b6b7a; --line:#dde3ea; --accent:#0b3c5d; --accent-ink:#fff; --user:#e8f0f7; --warn:#fff4e5; --warn-ink:#7a4a00; }
   @media (prefers-color-scheme: dark) { :root { --bg:#0f1720; --card:#16212d; --ink:#e6edf3; --mute:#93a4b5; --line:#2a3947; --accent:#5aa6d6; --accent-ink:#0b1620; --user:#1d2f40; --warn:#3a2c10; --warn-ink:#ffd58a; } }
@@ -30,6 +31,21 @@
   .src .hl { position:absolute; border:2px solid #e11d48; background:rgba(225,29,72,.12); border-radius:3px; pointer-events:none; }
   .src img { display:block; max-width:100%; margin-top:6px; border:1px solid var(--line); border-radius:8px; background:#fff; }
   .warn { margin-top:8px; padding:8px 10px; border-radius:8px; background:var(--warn); color:var(--warn-ink); font-size:14px; white-space:normal; }
+  .charts { margin-top:10px; display:flex; flex-direction:column; gap:14px; white-space:normal; }
+  .chartbox { border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--card); }
+  .chartbox h3 { margin:0 0 6px; font-size:15px; }
+  .cv { position:relative; height:240px; }
+  .cv-note { font-size:13px; color:var(--mute); margin:4px 0 0; }
+  .tbl { overflow-x:auto; margin-top:8px; }
+  .tbl table { border-collapse:collapse; width:100%; font-size:14px; }
+  .tbl caption { text-align:left; color:var(--mute); font-size:13px; padding:2px 0; }
+  .tbl th, .tbl td { border-bottom:1px solid var(--line); padding:5px 8px; text-align:left; }
+  .tbl th.n, .tbl td.n { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .tbl tfoot td { font-weight:600; }
+  .fb { margin-top:8px; display:flex; align-items:center; gap:8px; font-size:14px; color:var(--mute); white-space:normal; }
+  .fb button { border:1px solid var(--line); background:var(--card); border-radius:8px; padding:2px 10px; cursor:pointer; font-size:16px; }
+  .fb button:disabled { opacity:.5; cursor:default; }
+  @media (max-width:520px) { .cv { height:200px; } .wrap { padding:10px; } }
   form { display:flex; gap:8px; }
   input, select { font:inherit; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink); }
   input[type=text] { flex:1; min-width:0; }
@@ -89,7 +105,9 @@ const EXAMPLES = [
   "Biên lợi nhuận gộp quý 2/2026 so với quý 2/2025?",
   "Tổng tài sản và nợ phải trả tại 30/6/2026?",
   "ROE 6 tháng đầu năm 2026 là bao nhiêu?",
-  "Dòng tiền từ hoạt động kinh doanh quý 4/2025?"
+  "Dòng tiền từ hoạt động kinh doanh quý 4/2025?",
+  "Xu hướng doanh thu thuần qua 6 quý?",
+  "Vì sao lợi nhuận sau thuế quý 2/2026 tăng so với cùng kỳ?"
 ];
 const $ = id => document.getElementById(id);
 let history = [];          // [{role: "user"|"model", text}]
@@ -120,6 +138,104 @@ function sourcesHtml(list) {
   return `<div class="src"><strong>Nguồn tham khảo</strong><ul>${items}</ul></div>`;
 }
 
+// ---- định dạng số kiểu Việt Nam (dấu chấm nghìn, dấu phẩy thập phân), khớp với phía máy chủ
+function vn(x, nd = 1) {
+  const a = Math.abs(x).toFixed(nd), [i, f] = a.split(".");
+  return (x < 0 && Number(a) !== 0 ? "-" : "") + i.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + (f ? "," + f : "");
+}
+const signed = (x, nd = 1) => (x >= 0 ? "+" : "") + vn(x, nd);
+
+// ---- biểu đồ: Chart.js nạp trễ (chỉ khi có biểu đồ cần vẽ), ghim phiên bản + SRI; tải lỗi thì vẫn còn bảng số liệu
+const CHART_JS = { src: "https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js", integrity: "sha384-vsrfeLOOY6KuIYKDlmVH5UiBmgIdB1oEf7p01YgWHuqmOHfZr374+odEv96n9tNC" };
+let chartLib = null;
+function loadChartJs() {
+  if (window.Chart) return Promise.resolve(window.Chart);
+  chartLib = chartLib || new Promise((resolve, reject) => {
+    const el = document.createElement("script");
+    el.src = CHART_JS.src; el.integrity = CHART_JS.integrity; el.crossOrigin = "anonymous"; el.referrerPolicy = "no-referrer";
+    el.onload = () => window.Chart ? resolve(window.Chart) : reject(new Error("no Chart"));
+    el.onerror = () => { chartLib = null; reject(new Error("load")); };
+    document.head.appendChild(el);
+  });
+  return chartLib;
+}
+const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+function drawChart(box, block) {
+  const cv = document.createElement("div"); cv.className = "cv";
+  const canvas = document.createElement("canvas");
+  canvas.setAttribute("role", "img");
+  canvas.setAttribute("aria-label", `Biểu đồ ${block.title}: ` + block.rows.map(r => `${r.label} ${vn(r.value / block.scale)} ${block.unit}`).join("; "));
+  cv.appendChild(canvas);
+  box.insertBefore(cv, box.querySelector(".tbl"));
+  loadChartJs().then(Chart => {
+    new Chart(canvas, {
+      type: "bar",
+      data: { labels: block.rows.map(r => r.period || r.label),
+              datasets: [{ label: block.unit, data: block.rows.map(r => +(r.value / block.scale).toFixed(1)), backgroundColor: cssVar("--accent"), borderRadius: 4 }] },
+      options: { responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${vn(c.parsed.y)} ${block.unit}` } } },
+        scales: { x: { ticks: { color: cssVar("--mute") }, grid: { display: false } },
+                  y: { ticks: { color: cssVar("--mute"), callback: v => vn(v, 0) }, grid: { color: cssVar("--line") },
+                       title: { display: true, text: block.unit, color: cssVar("--mute") } } } } });
+  }).catch(() => {
+    cv.remove();
+    const n = document.createElement("p"); n.className = "cv-note"; n.textContent = "Không tải được thư viện vẽ biểu đồ; số liệu xem ở bảng bên dưới.";
+    box.insertBefore(n, box.querySelector(".tbl"));
+  });
+}
+
+function tableHtml(block) {
+  const u = block.unit, k = block.kind;
+  const head = k === "series" ? `<th>Kỳ</th><th class="n">Giá trị (${esc(u)})</th><th>Nguồn</th>`
+             : k === "breakdown" ? `<th>Khoản mục</th><th class="n">Đóng góp (${esc(u)})</th>`
+             : `<th>Kỳ</th><th class="n">Giá trị (${esc(u)})</th>`;
+  const body = block.rows.map(r => {
+    const num = k === "breakdown" ? signed(r.value / block.scale) : vn(r.value / block.scale);
+    const src = k === "series" ? `<td>${r.source ? esc(`${r.source.doc} · trang PDF ${r.source.page}`) : ""}</td>` : "";
+    return `<tr><td>${esc(r.label)}</td><td class="n">${num}</td>${src}</tr>`;
+  }).join("");
+  let foot = "";
+  if (k === "comparison" && block.change != null)
+    foot = `<tr><td>Thay đổi</td><td class="n">${signed(block.change / block.scale)}${block.growth != null ? ` (${signed(block.growth * 100)}%)` : ""}</td></tr>`;
+  if (k === "breakdown" && block.change != null)
+    foot = `<tr><td>Tổng chênh lệch</td><td class="n">${signed(block.change / block.scale)}</td></tr>`;
+  return `<div class="tbl"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody>${foot ? `<tfoot>${foot}</tfoot>` : ""}</table></div>`;
+}
+
+function chartsEl(blocks) {
+  if (!blocks || !blocks.length) return null;
+  const wrap = document.createElement("div"); wrap.className = "charts";
+  blocks.forEach(b => {
+    const box = document.createElement("div"); box.className = "chartbox";
+    box.innerHTML = `<h3>${esc(b.title)}</h3>` + tableHtml(b);
+    wrap.appendChild(box);
+    if (b.chart && b.rows.length >= 2) drawChart(box, b);
+  });
+  return wrap;
+}
+
+// ---- phản hồi 👍/👎 (chỉ gửi câu hỏi, câu trả lời, nhãn, thời điểm)
+function feedbackEl(question, answer) {
+  const bar = document.createElement("div"); bar.className = "fb";
+  bar.innerHTML = `<span>Câu trả lời có hữu ích không?</span>
+    <button type="button" data-l="up" aria-label="Hữu ích" title="Hữu ích">👍</button>
+    <button type="button" data-l="down" aria-label="Chưa hữu ích" title="Chưa hữu ích">👎</button>`;
+  bar.querySelectorAll("button").forEach(btn => btn.onclick = async () => {
+    bar.querySelectorAll("button").forEach(x => x.disabled = true);
+    try {
+      const r = await fetch("/api/feedback", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, answer: answer.slice(0, 8000), label: btn.dataset.l, timestamp: new Date().toISOString() }) });
+      if (!r.ok) throw new Error("feedback");
+      bar.textContent = "Cảm ơn bạn đã phản hồi.";
+    } catch (_) {
+      bar.querySelectorAll("button").forEach(x => x.disabled = false);
+      bar.querySelector("span").textContent = "Chưa gửi được phản hồi, bạn bấm lại nhé.";
+    }
+  });
+  return bar;
+}
+
 async function ask(question) {
   if (busy || !question.trim()) return;
   busy = true; $("send").disabled = true;
@@ -133,8 +249,11 @@ async function ask(question) {
     if (data.unsupported_numbers && data.unsupported_numbers.length)
       html += `<div class="warn">Các số sau trong câu trả lời <strong>không khớp</strong> kết quả tra cứu, hãy kiểm tra lại: ${esc(data.unsupported_numbers.join(", "))}</div>`;
     (data.warnings || []).forEach(w => { html += `<div class="warn">${esc(w)}</div>`; });
-    html += sourcesHtml(data.sources);
     wait.innerHTML = html;
+    const ch = chartsEl(data.charts);
+    if (ch) wait.appendChild(ch);
+    wait.insertAdjacentHTML("beforeend", sourcesHtml(data.sources));
+    wait.appendChild(feedbackEl(question, data.answer));
     history.push({ role: "user", text: question }, { role: "model", text: data.answer });
     history = history.slice(-12);
   } catch (e) {
