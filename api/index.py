@@ -10,7 +10,6 @@ import time
 from collections import defaultdict, deque
 from datetime import datetime
 from pathlib import Path
-from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -31,7 +30,6 @@ OFFICIAL_PDF_URLS = {
     "q2-2026": "https://d8um25gjecm9v.cloudfront.net/cms/20260730_VNM_BCTC_da_soat_xet_Q2_2026_Hop_nhat_76ef2e29c1.pdf",
 }
 RATE_PER_MINUTE = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "6"))
-CHART_PER_MINUTE = int(os.environ.get("CHART_LIMIT_PER_MINUTE", "30"))
 FEEDBACK_PER_MINUTE = int(os.environ.get("FEEDBACK_LIMIT_PER_MINUTE", "20"))
 MAX_HISTORY_TURNS = int(os.environ.get("MAX_HISTORY_TURNS", "6"))
 MAX_QUESTION_CHARS = 500
@@ -39,7 +37,6 @@ MAX_QUESTION_CHARS = 500
 app = FastAPI(title="Chatbot BCTC Vinamilk")
 _agent: VinamilkAgent | None = None
 _hits: dict[str, deque] = defaultdict(deque)          # IP -> thời điểm các lần hỏi gần đây (chỉ có tác dụng trong một phiên bản hàm đang chạy)
-_chart_hits: dict[str, deque] = defaultdict(deque)    # như trên, cho mục Biểu đồ (không gọi Gemini nên giới hạn rộng hơn)
 _fb_hits: dict[str, deque] = defaultdict(deque)       # như trên, nhưng riêng cho phản hồi để không trừ vào lượt hỏi
 
 
@@ -51,14 +48,6 @@ class Turn(BaseModel):
 class AskBody(BaseModel):
     question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
     history: list[Turn] = []
-
-
-class ChartBody(BaseModel):
-    mode: str = Field(pattern="^(series|growth|explain)$")           # xu hướng | so sánh hai kỳ | phân rã biến động
-    metrics: list[str] = Field(min_length=1, max_length=3)            # series: tối đa 3 chỉ tiêu; hai chế độ còn lại dùng chỉ tiêu đầu
-    period: str | None = Field(default=None, max_length=30)
-    kind: str = Field(default="yoy", pattern="^(yoy|qoq)$")
-    basis: str = Field(default="quy", pattern="^(quy|luy_ke)$")
 
 
 class FeedbackBody(BaseModel):
@@ -149,27 +138,6 @@ def ask(body: AskBody, request: Request):
         raise HTTPException(502, "Trợ lý đang bận hoặc gặp sự cố tạm thời. Bạn thử lại sau ít phút nhé.")
     return {"answer": r.answer, "sources": _source_links(r.sources), "warnings": r.warnings,
             "unsupported_numbers": r.unsupported_numbers, "charts": build_charts(r.tool_calls)}
-
-
-@app.post("/api/chart")
-def chart(body: ChartBody, request: Request):
-    """Biểu đồ/bảng cho mục Biểu đồ: gọi thẳng công cụ (không qua Gemini) rồi dựng bằng cùng build_charts như khi hỏi đáp."""
-    _rate_limit(request, _chart_hits, CHART_PER_MINUTE, "Bạn thao tác hơi nhanh, vui lòng thử lại sau ít phút.")
-    if body.mode != "series" and not body.period:
-        raise HTTPException(422, "Chế độ này cần chọn kỳ báo cáo.")
-    calls = []
-    for metric in (body.metrics if body.mode == "series" else body.metrics[:1]):
-        if body.mode == "series":
-            name, args = "get_series", {"metric": metric, "basis": body.basis}
-        elif body.mode == "growth":
-            name, args = "get_growth", {"metric": metric, "period": body.period, "kind": body.kind, "basis": body.basis}
-        else:
-            name, args = "explain_change", {"metric": metric, "period": body.period, "base": body.kind, "basis": body.basis}
-        res = call_tool(name, args)
-        if not res.get("ok"):
-            raise HTTPException(400, res.get("error") or "Không dựng được biểu đồ cho lựa chọn này.")
-        calls.append(SimpleNamespace(name=name, ok=True, result=res))
-    return {"charts": build_charts(calls)}
 
 
 @app.post("/api/feedback")

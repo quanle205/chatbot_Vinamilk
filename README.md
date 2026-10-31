@@ -24,9 +24,6 @@ tăng trưởng, tìm nội dung thuyết minh. Số liệu lấy từ PDF bằn
 - **Biểu đồ xu hướng và bảng so sánh kỳ:** khi câu hỏi dẫn tới `get_series` (xu hướng nhiều kỳ) hoặc `get_growth` (so sánh hai kỳ),
   `/api/ask` trả thêm trường `charts` (kỳ, giá trị VND, đơn vị, nguồn) dựng từ kết quả công cụ, không từ lời mô hình.
   Giao diện vẽ cột bằng Chart.js 4.4.7 (nạp từ CDN, ghim phiên bản và SRI, chỉ khi cần) kèm bảng số liệu; câu hỏi một kỳ không có biểu đồ.
-- **Mục "Biểu đồ" (so sánh, đánh giá):** tab riêng, không cần khóa Gemini. Chọn Xu hướng 6 kỳ (tối đa 3 chỉ tiêu đặt cạnh nhau), So sánh hai kỳ
-  hoặc Phân rã biến động; `POST /api/chart` gọi thẳng công cụ rồi dựng biểu đồ, bảng và một dòng nhận xét do code tính (kỳ cao nhất/thấp nhất, thay đổi đầu–cuối).
-  Giới hạn `CHART_LIMIT_PER_MINUTE` (mặc định 30).
 - **Giải thích biến động (`explain_change`):** phân rã chênh lệch lợi nhuận sau thuế hoặc doanh thu thuần giữa hai kỳ (so với cùng kỳ
   năm trước hoặc quý liền trước) theo các khoản mục báo cáo KQKD; tổng đóng góp bằng đúng chênh lệch. Mô hình chỉ diễn giải, không suy đoán nguyên nhân kinh doanh.
 - **Phản hồi 👍/👎:** nút dưới mỗi câu trả lời gửi `POST /api/feedback` với `{question, answer, label: "up"|"down", timestamp?}`.

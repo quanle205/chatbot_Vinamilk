@@ -25,7 +25,6 @@ client = TestClient(api.app)
 def reset(script=None):
     api._hits.clear()
     api._fb_hits.clear()
-    api._chart_hits.clear()
     api._agent = VinamilkAgent(client=FakeClient(script), fallback_models=(), intent_filter=True) if script is not None else None
 
 
@@ -210,47 +209,6 @@ def test_feedback_rate_limit_is_separate_from_ask():
     assert codes[-1] == 429 and 429 not in codes[:api.FEEDBACK_PER_MINUTE]
     reset([resp([text("ok")])])
     assert client.post("/api/ask", json={"question": "Doanh thu quý 1/2026?"}).status_code == 200      # lượt hỏi không bị phản hồi chiếm
-
-
-def test_chart_endpoint_series_with_summary_and_no_gemini():
-    reset()                                                                  # không có khóa Gemini: mục Biểu đồ vẫn chạy
-    r = client.post("/api/chart", json={"mode": "series", "metrics": ["doanh thu thuần", "lợi nhuận sau thuế", "giá vốn hàng bán"]})
-    assert r.status_code == 200, r.text
-    charts = r.json()["charts"]
-    assert len(charts) == 3 and all(c["kind"] == "series" and c["chart"] and len(c["rows"]) == 6 for c in charts)
-    rev = charts[0]
-    vals = [x["value"] for x in rev["rows"]]
-    sm = rev["summary"]
-    assert sm["max"]["value"] == max(vals) == 18_847_347_464_988 and sm["min"]["value"] == min(vals)
-    assert sm["first"]["label"] == "quý 1/2025" and sm["last"]["label"] == "quý 2/2026"
-    assert sm["change"] == vals[-1] - vals[0] and abs(sm["growth"] - sm["change"] / vals[0]) < 1e-12
-
-
-def test_chart_endpoint_growth_and_explain_modes():
-    reset()
-    g = client.post("/api/chart", json={"mode": "growth", "metrics": ["doanh thu thuần"], "period": "Q1/2026", "kind": "yoy"}).json()["charts"]
-    assert len(g) == 1 and g[0]["kind"] == "comparison" and g[0]["rows"][0]["value"] == 16_148_657_871_623
-    e = client.post("/api/chart", json={"mode": "explain", "metrics": ["lợi nhuận sau thuế", "doanh thu thuần"], "period": "Q2/2026", "kind": "qoq"}).json()["charts"]
-    assert len(e) == 1 and e[0]["kind"] == "breakdown" and sum(r["value"] for r in e[0]["rows"]) == e[0]["change"]   # chỉ dùng chỉ tiêu đầu
-
-
-def test_chart_endpoint_validation_and_errors():
-    reset()
-    bad = [{"mode": "pie", "metrics": ["doanh thu thuần"]}, {"mode": "series", "metrics": []},
-           {"mode": "series", "metrics": ["a", "b", "c", "d"]}, {"mode": "growth", "metrics": ["doanh thu thuần"], "kind": "zzz", "period": "Q1/2026"},
-           {"mode": "growth", "metrics": ["doanh thu thuần"]}]                                    # thiếu kỳ
-    assert [client.post("/api/chart", json=b).status_code for b in bad] == [422] * len(bad)
-    r = client.post("/api/chart", json={"mode": "explain", "metrics": ["tổng tài sản"], "period": "Q1/2026"})
-    assert r.status_code == 400 and "lợi nhuận sau thuế" in r.json()["detail"]                  # chỉ tiêu không hỗ trợ: báo rõ bằng tiếng Việt
-    assert client.post("/api/chart", json={"mode": "growth", "metrics": ["doanh thu thuần"], "period": "Q9/2030"}).status_code == 400
-
-
-def test_chart_rate_limit_is_separate_from_ask():
-    reset()
-    codes = [client.post("/api/chart", json={"mode": "series", "metrics": ["doanh thu thuần"]}).status_code for _ in range(api.CHART_PER_MINUTE + 2)]
-    assert codes[-1] == 429 and 429 not in codes[:api.CHART_PER_MINUTE]
-    reset([resp([text("ok")])])
-    assert client.post("/api/ask", json={"question": "Doanh thu quý 1/2026?"}).status_code == 200
 
 
 if __name__ == "__main__":
