@@ -8,6 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from src.notes import search_notes  # noqa: E402
+from src.stats import build_coverage  # noqa: E402
 from src.tools.analyst import Analyst  # noqa: E402
 from src.tools.calc import calculate  # noqa: E402
 from src.tools.facts import Facts  # noqa: E402
@@ -185,6 +187,60 @@ def test_explain_change_rejects_bad_requests_as_values():
         r = call_tool("explain_change", args)
         assert r["ok"] is False and r["error"], args
     assert call_tool("explain_change", {"period": "Q1/2026"})["ok"] is False                 # thiếu tham số
+
+
+def test_error_messages_are_plain_sentences():
+    """str(KeyError) bọc thông báo trong dấu nháy; người dùng thấy câu thường."""
+    for call in (lambda: A.metric("chỉ tiêu không tồn tại xyz", "Q1/2026"), lambda: A.growth("chỉ tiêu không tồn tại xyz", "Q1/2026"),
+                 lambda: A.series("chỉ tiêu không tồn tại xyz"), lambda: call_tool("explain_change", {"metric": "lợi nhuận sau thuế", "period": "Q9/2030"})):
+        r = call()
+        assert r["ok"] is False and not r["error"].startswith(("'", '"')) and r["error"].endswith((".", ")")), r
+
+
+def test_series_carries_sources_and_notes_like_other_tools():
+    r = A.series("loi_nhuan_sau_thue")
+    assert r["ok"] and {s["doc"] for s in r["sources"]} >= {"q1-2025", "q2-2026"}
+    assert any("suy ra" in n for n in r["notes"]) and len(r["notes"]) == len(set(r["notes"]))        # Q4/2025 suy ra từ lũy kế; không lặp lưu ý
+
+
+def test_coverage_counts_match_the_data():
+    c = build_coverage(A.f)
+    assert [p["period"] for p in c["periods"]] == [str(p) for p in PERIODS] and c["totals"]["periods"] == 6
+    assert c["totals"]["cells"] == len(A.f.cells) == sum(p["cells"] for p in c["periods"])
+    assert c["totals"]["chunks"] == sum(p["chunks"] for p in c["periods"]) == 959
+    rev = next(m for m in c["metrics"] if m["key"] == "doanh_thu_thuan")
+    assert rev["have"] == [True] * 6                                         # doanh thu thuần có ở cả 6 báo cáo (mã 10 theo cả TT200 và TT99)
+    assert next(m for m in c["metrics"] if m["key"] == "tong_tai_san")["have"] == [True] * 6      # mã 270 (TT200) và 280 (TT99) đều được ánh xạ
+
+
+class _FakeRetriever:
+    """Bộ truy xuất giả trả đúng thứ tự định sẵn, để kiểm tra lọc/cắt của search_notes mà không phải dựng chỉ mục thật."""
+    def __init__(self, chunks):
+        self.chunks, self.calls = chunks, []
+
+    def search(self, query, k=6, docs=None, **_):
+        self.calls.append((k, docs))
+        return [type("Hit", (), {"chunk": c, "score": 1.0, "ranks": {}})() for c in self.chunks if not docs or c["doc"] in docs][:k]
+
+
+def _chunk(i, kind="van_ban", text=None):
+    return {"id": f"c{i}", "doc": "q2-2026", "quarter": "Q2", "year": 2026, "page": i, "kind": kind, "section": "Thuyết minh", "heading": "15. Vay",
+            "text": text or f"[Q2/2026 · Thuyết minh · trang {i}]" + chr(10) + f"Nội dung đoạn {i}"}
+
+
+def test_search_notes_filters_tables_trims_header_and_truncates():
+    chunks = [_chunk(1, "bang_so_lieu"), _chunk(2), _chunk(3, text="[Q2/2026 · Thuyết minh · trang 3]" + chr(10) + "x" * 3000), _chunk(4)]
+    fake = _FakeRetriever(chunks)
+    got = search_notes(fake, "vay", "Q2/2026", include_tables=False, k=2)
+    assert [g["id"] for g in got] == ["c2", "c3"] and fake.calls[0] == (6, {"q2-2026"})            # lấy dư (k*3) rồi bỏ bảng số liệu
+    assert got[0]["text"] == "Nội dung đoạn 2" and not got[0]["truncated"]                          # bỏ dòng tiêu đề "[Q2/2026 · ...]"
+    assert len(got[1]["text"]) == 2500 and got[1]["truncated"] is True
+    assert [g["id"] for g in search_notes(fake, "vay", None, include_tables=True, k=2)] == ["c1", "c2"]
+    try:
+        search_notes(fake, "vay", "kỳ nào đó")
+        raise AssertionError("kỳ sai phải bị từ chối")
+    except ValueError:
+        pass
 
 
 if __name__ == "__main__":

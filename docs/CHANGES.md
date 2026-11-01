@@ -55,24 +55,51 @@ Tra cứu số liệu; không tràn ngang ở 390 và 768 px; console không có
 Lighthouse (trang chào, máy tính để bàn): Accessibility 100, Best Practices 100, Performance 100.
 Cả 6 thẻ gợi ý và một câu ngoài phạm vi được hỏi thật qua API với phần gợi ý kỳ: 6 câu trả lời được, câu ngoài phạm vi vẫn bị từ chối.
 
-### Nhóm cần xác nhận
-1. **Ảnh mẫu không được đính kèm** trong yêu cầu, chỉ có mô tả chữ; bố cục làm theo mô tả, chưa đối chiếu được với ảnh thật.
-2. **Màu nhấn:** chọn đen (xám đậm `#111418`, chế độ tối đảo thành sáng); đổi sang xanh dương đậm chỉ cần sửa `--accent`.
-3. **Hàng số liệu:** chỉ còn "6 kỳ báo cáo" vì chưa có API trả số chỉ tiêu, số đoạn thuyết minh, số trang PDF; đếm ở trình duyệt không được. Muốn đủ 4 số cần thêm endpoint thống kê (đụng backend, chưa làm).
-4. **Chỉ báo "DuckDB 6 kỳ"** hiện xanh khi `/api/health` trả `ok`, nhưng `/api/health` hiện không kiểm tra riêng DuckDB.
-5. **Ghi chú số suy ra/đã sửa OCR** trong thẻ Nguồn chưa hiển thị được: `/api/ask` không trả `notes` (chỉ có `warnings`). Câu trả lời của mô hình thường tự nêu lưu ý này trong văn bản.
-6. **Nguồn của câu xu hướng:** `get_series` không trả `sources` cấp cao nên thẻ "Nguồn" trống; nguồn từng kỳ nằm trong cột "Nguồn" của bảng.
-7. **Thẻ gợi ý số 6 (khoản vay):** trả lời được nhưng đôi khi mô hình tự cộng vay ngắn hạn và dài hạn (8.454,9 tỷ), con số này bị `guard.py` cảnh báo "không khớp" dù đúng số học. Nên cân nhắc bổ sung chỉ tiêu "tổng nợ vay" hoặc đổi câu.
-8. **Mục menu "Sắp có":** Thuyết minh & nguồn, Xu hướng & so sánh, Thống kê (cần thêm API). Có xóa `public/index.old.html` hay không.
-9. **Ảnh trang PDF** chỉ hiện khi tệp tĩnh `public/pages` được phục vụ (Vercel làm việc này; chạy `uvicorn api.index:app` thuần thì ảnh trả 404 như trước đây). Để thử cục bộ, có thể mount thêm `/pages` trong một tệp chạy riêng.
+### Nhóm cần xác nhận (thiết kế lại)
+1. **Ảnh mẫu không được đính kèm** trong yêu cầu thiết kế lại, chỉ có mô tả chữ; bố cục làm theo mô tả, chưa đối chiếu được với ảnh thật.
+2. **Màu nhấn:** chọn đen (`#111418`, chế độ tối đảo thành sáng); đổi sang xanh dương đậm chỉ cần sửa biến `--accent` trong `public/css/app.css`.
+
+## 5. Hoàn thiện các mục còn lại (nhánh `feature/redesign-ui`) – gợi ý cho mục 2.4.2, 2.5.4 và Chương 3
+
+Ba mục menu từng để "Sắp có" nay đã chạy thật, cùng hàng số liệu ở màn hình chào. Nguyên tắc chung: **mọi con số lấy từ công cụ/dữ liệu qua API, không qua mô hình**,
+dùng lại các khối dựng sẵn (`build_charts`, `source_links`) để Trò chuyện và các mục khác hiển thị giống nhau.
+
+- **Thuyết minh & nguồn** (`POST /api/notes`, `src/notes.py`): cùng `HybridRetriever` với agent (chia sẻ một `Toolbox` để chỉ nạp chỉ mục một lần), lọc theo kỳ đang chọn,
+  mặc định chỉ văn bản thuyết minh (tùy chọn gồm bảng số liệu). Mỗi kết quả kèm trang PDF, nhãn "văn bản OCR, cần đối chiếu", liên kết PDF chính thức **mở đúng trang** (`#page=N`) và ảnh trang nếu có.
+- **Xu hướng & so sánh** (`POST /api/chart`): gọi thẳng `get_series`/`get_growth`/`explain_change` rồi dựng bằng `build_charts` như câu trả lời của trợ lý (biểu đồ đường, bảng, dòng nhận xét do code tính).
+- **Thống kê** (`GET /api/stats`, `src/stats.py`): độ phủ theo kỳ (chuẩn mực TT200/TT99, số chỉ tiêu có số liệu, đoạn thuyết minh, ảnh trang) và ma trận chỉ tiêu × kỳ; đọc từ `Facts` trong bộ nhớ, lưu đệm.
+  Cùng nguồn với hàng số liệu ở màn hình chào (6 kỳ · 50 chỉ tiêu · 959 đoạn · 50 trang PDF).
+- **Trò chuyện:** thẻ Nguồn nay có "Ghi chú" (số suy ra từ lũy kế, số đã phân loại lại, số đã sửa OCR) từ trường `notes` mới của `/api/ask`; câu hỏi xu hướng nay có nguồn từng kỳ
+  (`get_series` trả `sources`/`notes` cấp cao như các công cụ khác); liên kết PDF chính thức mở đúng trang.
+- **`/api/health`** trả thêm `periods` (đọc thật DuckDB) nên chấm "DuckDB" xanh chỉ khi dữ liệu mở được. **`/api/lookup`** trả lý do khi không tra được và gợi ý chỉ tiêu gần nhất
+  thay vì chuỗi rỗng; thông báo lỗi công cụ không còn bị bọc dấu nháy (`reason()` trong `analyst.py`).
+
+### Tổ chức lại mã cho gọn và đồng nhất
+- `api/index.py` chỉ còn định tuyến; logic dùng chung chuyển vào `src/web/` (`ratelimit.py`: `RateLimiter`; `sources.py`; `schemas.py`) và `src/paths.py`. Ba bộ giới hạn tốc độ: hỏi đáp (6/phút), tra cứu/thuyết minh/biểu đồ (30/phút), phản hồi (20/phút).
+- Giao diện tách thành `public/index.html` (khung), `public/css/app.css` và các module ES trong `public/js/` (một module một trách nhiệm: `api.js` gọi API và đổi lỗi thành tiếng Việt,
+  `charts.js`, `sources.js`, `markdown.js`, `dom.js`, …; mỗi màn hình một tệp trong `views/`). Backend nay phục vụ `public/` (kể cả `/pages/*.webp`) nên chạy cục bộ giống Vercel.
+- Test: `test_health_and_static_page` đổi sang kiểm tra khung trang và các tệp `/js`, `/css` (đúng kiểu MIME) thay vì tìm chuỗi `/api/ask` trong HTML, vì mã nay nằm ở `js/chat.js`.
+
+### Kiểm tra
+Test: `test_tools` 17/17, `test_agent` 25/25, `test_api` 25/25. Trên Chrome headless với Gemini thật: hàng số liệu từ API; Thuyết minh (tìm theo kỳ, kèm bảng, không có kết quả, quá ngắn, đổi kỳ ở thanh trên);
+Xu hướng (3 chỉ tiêu, so sánh, phân rã, tổ hợp không hợp lệ); Thống kê (4 thẻ, 6 dòng kỳ, 50 chỉ tiêu × 6 kỳ); hỏi đáp có ghi chú và biểu đồ, tải lại giữ nguyên; 390 px không tràn ngang ở cả 5 màn hình; console không lỗi.
+
+### Nhóm cần xác nhận (hoàn thiện)
+1. **Ảnh trang thuyết minh:** repo chỉ có 50 ảnh trang (chủ yếu ba báo cáo chính); 346 trong 384 trang có đoạn thuyết minh **chưa có ảnh** vì PDF gốc (`data/raw`) không có trên máy dựng. Mục Thuyết minh ghi rõ "chưa có ảnh trang N" và mở PDF chính thức đúng trang cho Q1/Q2/2026;
+   bốn kỳ 2025 chưa có liên kết PDF nên trỏ về trang báo cáo của Vinamilk (cần bổ sung `OFFICIAL_PDF_URLS` trong `src/web/sources.py`). Muốn đủ ảnh: chạy `src/ingest/render_pages.py` ở máy có PDF (~30 MB thêm vào git).
+2. **Nhãn "959 đoạn thuyết minh"** tính cả 72 đoạn bảng số liệu (tổng chỉ mục = 959); thẻ ở màn hình Thống kê ghi "đoạn văn bản và bảng đã lập chỉ mục".
+3. **Biểu đồ trong Trò chuyện** chỉ hiện khi mô hình chọn gọi `get_series`/`get_growth`/`explain_change` (đo 8/8 lần với câu xu hướng qua API, nhưng một lần trong lúc kiểm tra giao diện mô hình không gọi). Mục Xu hướng & so sánh luôn vẽ được vì không qua mô hình.
+4. **Thẻ gợi ý số 6 (khoản vay):** đôi khi mô hình tự cộng vay ngắn hạn và dài hạn (8.454,9 tỷ), con số đúng nhưng không do công cụ trả nên `guard.py` cảnh báo "không khớp". Cân nhắc bổ sung chỉ tiêu "tổng nợ vay" hoặc đổi câu.
+5. **Lần tìm thuyết minh đầu tiên** sau khi khởi động hàm mất vài giây (dựng chỉ mục BM25); trên Vercel mỗi lần hàm "nguội" bị khởi động lại sẽ chịu độ trễ này.
+6. Có xóa `public/index.old.html` hay không.
 
 ## Kiểm thử
 
 | Bộ test | Trước | Sau |
 |---|---|---|
-| tests/test_tools.py | 10/10 đạt | 13/13 đạt (thêm 3 test `explain_change`) |
+| tests/test_tools.py | 10/10 đạt | 17/17 đạt (thêm 3 test `explain_change`, 4 test thống kê/thuyết minh/thông báo lỗi) |
 | tests/test_agent.py | 23/23 đạt | 25/25 đạt (thêm 2 test: guard với số phân rã, khai báo công cụ/prompt) |
-| tests/test_api.py | 8/8 đạt | 16/16 đạt (biểu đồ 6 kỳ, câu một kỳ không biểu đồ, bảng so sánh/phân rã, phản hồi 200/422/429/502, webhook, không lộ khóa/IP) |
+| tests/test_api.py | 8/8 đạt | 25/25 đạt (biểu đồ 6 kỳ, câu một kỳ không biểu đồ, bảng so sánh/phân rã, phản hồi 200/422/429/502, webhook, không lộ khóa/IP) |
 
 Kiểm tra tay (Chrome headless, Gemini thật, máy chủ cục bộ): câu xu hướng 6 quý, so sánh cùng kỳ, câu một kỳ, câu "vì sao lợi nhuận tăng", bấm 👍; giao diện 390 px không tràn ngang; console không có lỗi.
 

@@ -2,12 +2,11 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
+from ..paths import CHUNKS_PATH
 from ..tools.facts import Period
 from ..tools.registry import TOOL_SPECS, call_tool
 
-CHUNKS_PATH = Path(__file__).resolve().parents[2] / "data" / "processed" / "chunks.jsonl"
 SNIPPET_CHARS = 1600
 
 SEARCH_SPEC = {

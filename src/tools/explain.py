@@ -9,7 +9,7 @@ nếu số liệu hai kỳ có lệch (vd phân loại lại số cùng kỳ) th
 from __future__ import annotations
 
 from ..rag.text import fmt_ty
-from .analyst import _merge, _src_text, fmt_pct
+from .analyst import _merge, _src_text, fmt_pct, reason
 from .facts import DataUnavailable, Period
 from .metrics import get_metric
 
@@ -66,7 +66,7 @@ def explain_change(an, metric: str, period: str, base: str = "yoy", basis: str =
                 base_v += sign * b.value
             items.append({"key": key, "name": label, "current": cur, "base": base_v, "effect": cur - base_v})
     except (DataUnavailable, KeyError, ValueError) as e:
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": reason(e)}
 
     total = head_cur.value - head_base.value
     src, notes = _merge(values)

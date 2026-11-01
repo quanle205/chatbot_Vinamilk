@@ -17,6 +17,11 @@ STATEMENT_VI = {"CDKT": "Báo cáo tình hình tài chính", "KQKD": "Báo cáo 
                 "LCTT": "Báo cáo lưu chuyển tiền tệ"}
 
 
+def reason(e: Exception) -> str:
+    """Lý do lỗi dạng câu cho người dùng: str(KeyError) bọc thông báo trong dấu nháy nên lấy thẳng args[0]."""
+    return str(e.args[0]) if isinstance(e, KeyError) and e.args else str(e)
+
+
 def fmt_pct(x: float) -> str:
     return f"{x * 100:,.1f}%".replace(",", "_").replace(".", ",").replace("_", ".")
 
@@ -73,7 +78,7 @@ class Analyst:
             p = Period.parse(period)
             v = self.value(m, p, basis)
         except (DataUnavailable, KeyError, ValueError) as e:
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": reason(e)}
         text = (f"{m.name} {v.description}: {fmt_vnd(v.value)} VND (≈ {fmt_ty(v.value)} tỷ đồng). "
                 f"Nguồn: {_src_text(v.sources)}.")
         if v.notes:
@@ -95,7 +100,7 @@ class Analyst:
             p = Period.parse(period)
             val, inputs, annual = r.fn(self, p, basis)
         except (DataUnavailable, KeyError, ValueError, ZeroDivisionError) as e:
-            return {"ok": False, "error": str(e) if not isinstance(e, ZeroDivisionError) else "Mẫu số bằng 0."}
+            return {"ok": False, "error": "Mẫu số bằng 0." if isinstance(e, ZeroDivisionError) else reason(e)}
         src, notes = _merge(list(inputs.values()))
         shown = fmt_pct(val) if r.unit == "%" else f"{fmt_num(val)} {r.unit}"
         months = 3 * p.quarter if basis == "luy_ke" else 3
@@ -166,7 +171,7 @@ class Analyst:
             else:
                 raise ValueError("kind phải là yoy, qoq hoặc ytd.")
         except (DataUnavailable, KeyError, ValueError) as e:
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": reason(e)}
         src, notes = _merge([cur, prev])
         delta = cur.value - prev.value
         pct = None if prev.value == 0 else delta / abs(prev.value)
@@ -191,13 +196,14 @@ class Analyst:
         try:
             m = get_metric(metric)
         except KeyError as e:
-            return {"ok": False, "error": str(e)}
-        rows = []
+            return {"ok": False, "error": reason(e)}
+        rows, values = [], []
         for p in self.f.periods():
             try:
                 v = self.value(m, p, basis)
             except DataUnavailable:
                 continue
+            values.append(v)
             rows.append({"period": str(p), "description": v.description, "value": v.value,
                          "notes": v.notes, "sources": v.sources})
         if not rows:
@@ -207,7 +213,8 @@ class Analyst:
         derived = [r["description"] for r in rows if any("suy ra" in n for n in r["notes"])]
         if derived:
             text += " Số suy ra (báo cáo không in sẵn): " + ", ".join(derived) + "."
-        return {"ok": True, "text": text, "metric": m.key, "basis": basis, "rows": rows}
+        src, notes = _merge(values)
+        return {"ok": True, "text": text, "metric": m.key, "basis": basis, "rows": rows, "sources": src, "notes": notes}
 
 
 # ====================================================================== định nghĩa tỷ số

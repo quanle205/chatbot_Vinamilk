@@ -12,10 +12,12 @@ tăng trưởng, tìm nội dung thuyết minh. Số liệu lấy từ PDF bằn
 | src/ingest | pipeline dữ liệu: `preprocess.py` (PDF -> OCR), `parse_statements.py`, `repair_identities.py`, `build_db.py` |
 | src/rag | `chunking.py`, BM25 + vector n-gam + RRF (`retriever.py`) |
 | src/tools | tra số, tỷ số, tăng trưởng, chuỗi kỳ, phân rã biến động (`explain.py`), máy tính (`TOOL_SPECS`, `call_tool`) |
+| src/notes.py, src/stats.py | tìm đoạn thuyết minh (mục Thuyết minh & nguồn) và thống kê độ phủ dữ liệu (mục Thống kê), đều không qua mô hình |
+| src/web | lớp web dùng chung: giới hạn tốc độ, liên kết nguồn (PDF chính thức, ảnh trang), kiểu dữ liệu vào |
 | src/agent | agent Gemini function-calling gọi công cụ + retriever; kiểm tra số bám nguồn (`guard.py`); dựng dữ liệu biểu đồ/bảng từ kết quả công cụ (`charts.py`) |
 | src/feedback.py | lưu phản hồi 👍/👎 qua giao diện `FeedbackStore` (mặc định ghi log, tùy chọn webhook) |
 | src/train | huấn luyện: bộ phân loại ý định câu hỏi (`train_intent.py`) và tìm lưới tham số truy xuất (`tune_retrieval.py`) |
-| api, public | API FastAPI (`api/index.py`) và trang chat tĩnh (`public/index.html`), kèm ảnh trang PDF dẫn chứng (`public/pages`) |
+| api, public | API FastAPI (`api/index.py`, chỉ còn định tuyến) và giao diện tĩnh: `public/index.html` (khung), `public/css/app.css`, `public/js/` (module ES), ảnh trang PDF dẫn chứng (`public/pages`) |
 | tests, eval | kiểm thử và đo chất lượng truy xuất |
 
 ## Tính năng
@@ -32,19 +34,33 @@ tăng trưởng, tìm nội dung thuyết minh. Số liệu lấy từ PDF bằn
 
 ## Giao diện
 
-`public/index.html` (HTML + CSS + JS thuần trong một tệp, không bước build) có bố cục hai cột: thanh bên (cuộc trò chuyện mới, 5 mục menu,
-danh sách "Gần đây" lưu trong `localStorage`, hai chỉ báo DuckDB/Gemini lấy từ `/api/health`) và vùng chính (thanh trên có chọn kỳ báo cáo,
-màn hình chào với 6 thẻ gợi ý, ô nhập bo tròn). Có chế độ tối theo hệ thống, ngăn kéo thanh bên dưới 900 px, đổi tên/xóa cuộc trò chuyện,
-nút Dừng/Sao chép/Tạo lại/Thử lại, thẻ "Nguồn" mở ảnh trang PDF có khung đỏ, biểu đồ đường Chart.js cho câu hỏi nhiều kỳ.
-Mục "Tra cứu số liệu" gọi `/api/lookup`; ba mục chưa có API (Thuyết minh & nguồn, Xu hướng & so sánh, Thống kê) hiện "Sắp có".
-Kỳ báo cáo được đưa vào câu hỏi dưới dạng gợi ý ngữ cảnh ("Nếu không nêu kỳ, hiểu là kỳ …") vì `/api/ask` chưa nhận tham số kỳ.
-Bản giao diện cũ giữ ở `public/index.old.html`.
+Giao diện tĩnh (HTML + CSS + module ES thuần, không bước build) có hai cột: thanh bên (cuộc trò chuyện mới, 5 mục menu, "Gần đây" lưu trong `localStorage`
+với đổi tên/xóa, hai chỉ báo DuckDB/Gemini từ `/api/health`) và vùng chính (thanh trên có chọn kỳ báo cáo). Có chế độ tối theo hệ thống,
+ngăn kéo thanh bên dưới 900 px, Lighthouse Accessibility 100.
+
+| Mục | Làm gì | API |
+|---|---|---|
+| Trò chuyện | hỏi đáp qua Gemini; trả lời kèm thẻ Nguồn (trang PDF, ảnh trang có khung đỏ, ghi chú số suy ra/đã sửa OCR), biểu đồ đường cho câu hỏi nhiều kỳ, nút Dừng/Sao chép/Tạo lại/Thử lại, 👍/👎 | `/api/ask`, `/api/feedback` |
+| Tra cứu số liệu | một chỉ tiêu, một kỳ, đọc thẳng từ dữ liệu | `/api/lookup` |
+| Thuyết minh & nguồn | tìm đoạn thuyết minh theo nội dung (tùy chọn gồm bảng số liệu), mở PDF chính thức đúng trang, xem ảnh trang nếu có | `/api/notes` |
+| Xu hướng & so sánh | biểu đồ 6 kỳ (tối đa 3 chỉ tiêu), so sánh hai kỳ, phân rã biến động lợi nhuận/doanh thu | `/api/chart` |
+| Thống kê | độ phủ dữ liệu: số kỳ, chỉ tiêu, đoạn thuyết minh, trang PDF dẫn chứng; bảng theo kỳ và ma trận chỉ tiêu × kỳ | `/api/stats` |
+
+Bốn mục sau Trò chuyện đọc thẳng dữ liệu, không cần khóa Gemini. Hàng số liệu ở màn hình chào lấy từ `/api/stats`.
+Kỳ báo cáo được đưa vào câu hỏi dưới dạng gợi ý ngữ cảnh ("Nếu không nêu kỳ, hiểu là kỳ …") vì `/api/ask` chưa nhận tham số kỳ; các mục còn lại dùng kỳ làm bộ lọc thật.
+Bản giao diện cũ giữ ở `public/index.old.html`. Mã giao diện: `js/main.js` (điều phối), `chat.js`, `views/*.js` (từng màn hình), và các module dùng chung `api.js`, `charts.js`, `sources.js`, `markdown.js`, `dom.js`, `format.js`, `state.js`, `storage.js`, `config.js`.
 
 | Trước | Sau (sáng) | Sau (tối) |
 |---|---|---|
 | ![Giao diện cũ](docs/screenshots/truoc-giao-dien-cu.png) | ![Màn hình chào](docs/screenshots/sau-man-hinh-chao-sang.png) | ![Chế độ tối](docs/screenshots/sau-man-hinh-chao-toi.png) |
 
-![Trả lời kèm nguồn](docs/screenshots/sau-tra-loi-co-nguon-sang.png)
+| Trả lời kèm nguồn và ghi chú | Thuyết minh & nguồn |
+|---|---|
+| ![Hỏi đáp](docs/screenshots/sau-hoi-dap-nguon-ghi-chu.png) | ![Thuyết minh](docs/screenshots/sau-thuyet-minh-nguon.png) |
+
+| Xu hướng & so sánh | Thống kê |
+|---|---|
+| ![Xu hướng](docs/screenshots/sau-xu-huong-so-sanh.png) | ![Thống kê](docs/screenshots/sau-thong-ke.png) |
 
 | Điện thoại | Ngăn kéo |
 |---|---|
@@ -55,9 +71,9 @@ Bản giao diện cũ giữ ở `public/index.old.html`.
 Triển khai trên Vercel: import repo, Framework **Other** (không đổi Build Command), đặt biến môi trường `GEMINI_API_KEY`
 (khóa Gemini miễn phí tại aistudio.google.com/apikey; tùy chọn `GEMINI_MODEL`, mặc định `gemini-3.8-flash`). Không commit khóa lên git.
 `vercel.json` giới hạn thời gian chạy 60 giây và chỉ đóng gói `src/`, `data/processed/` và `public/pages/`.
-Bộ giới hạn tốc độ (`RATE_LIMIT_PER_MINUTE`, mặc định 6 lượt mỗi phút mỗi địa chỉ) nằm trong bộ nhớ của từng phiên bản hàm nên chỉ là lớp bảo vệ cơ bản.
+Các bộ giới hạn tốc độ (xem bên dưới) nằm trong bộ nhớ của từng phiên bản hàm nên chỉ là lớp bảo vệ cơ bản.
 
-Chạy trên máy:
+Chạy trên máy (Windows): `.\chay.bat` (hoặc `powershell -File .\chay.ps1`). Script tự nạp khóa Gemini từ biến môi trường, `.env` hoặc `.streamlit\secrets.toml` (đều nằm trong `.gitignore`), cài thư viện nếu thiếu, chạy server và mở http://localhost:8000; đổi cổng bằng `-Port 8001`. Chạy tay:
 
 ```
 pip install -r requirements.txt uvicorn
@@ -65,7 +81,7 @@ set GEMINI_API_KEY=khoa-cua-ban
 python -m uvicorn api.index:app --port 8000
 ```
 
-rồi mở http://localhost:8000. Tab "Tra số trực tiếp" dùng ngay được; tab "Hỏi đáp" cần khóa Gemini.
+Không có khóa thì mục Trò chuyện báo "chưa sẵn sàng", bốn mục còn lại vẫn dùng được. Giới hạn mỗi phút theo IP: `RATE_LIMIT_PER_MINUTE` (hỏi đáp, mặc định 6), `BROWSE_LIMIT_PER_MINUTE` (tra cứu, thuyết minh, biểu đồ; mặc định 30), `FEEDBACK_LIMIT_PER_MINUTE` (mặc định 20).
 
 ## Kiểm thử
 
