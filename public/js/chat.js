@@ -108,7 +108,7 @@ function historyBefore(index) {                         // các cặp hỏi-đá
 
 function chatError(status, data) {
   if (status === 422) return "Câu hỏi chưa hợp lệ (tối đa 500 ký tự). Bạn rút gọn rồi thử lại nhé.";
-  if (status === 503) return "Trợ lý chưa sẵn sàng (có thể thiếu khóa Gemini). Bạn vẫn có thể dùng mục Tra cứu số liệu ở thanh bên.";
+  if (status === 503) return "Trợ lý chưa sẵn sàng (có thể thiếu khóa Gemini). Bạn vẫn có thể dùng thẻ Tra cứu hoặc Thuyết minh.";
   return errorText(status, data);
 }
 
@@ -155,7 +155,7 @@ function retry(msg) {                                   // bỏ câu trả lời
   ask(msg.question, true);
 }
 
-// ------------------------------------------------------------------ thanh bên: cuộc trò chuyện gần đây
+// ------------------------------------------------------------------ hộp "Gần đây": các cuộc trò chuyện đã lưu
 function renderRecent() {
   const list = $("recent"); list.replaceChildren();
   if (!convs.length) { list.append(h("li", { class: "recent-empty", text: "Chưa có cuộc trò chuyện nào" })); return; }

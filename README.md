@@ -34,37 +34,23 @@ tăng trưởng, tìm nội dung thuyết minh. Số liệu lấy từ PDF bằn
 
 ## Giao diện
 
-Giao diện tĩnh (HTML + CSS + module ES thuần, không bước build) có hai cột: thanh bên (cuộc trò chuyện mới, 5 mục menu, "Gần đây" lưu trong `localStorage`
-với đổi tên/xóa, hai chỉ báo DuckDB/Gemini từ `/api/health`) và vùng chính (thanh trên có chọn kỳ báo cáo). Có chế độ tối theo hệ thống,
-ngăn kéo thanh bên dưới 900 px, Lighthouse Accessibility 100.
+Giao diện tĩnh (HTML + CSS + module ES thuần, không bước build), một cột như bản cũ: đầu trang (tên, chỉ báo DuckDB/Gemini từ `/api/health`, chọn kỳ báo cáo,
+hộp "Gần đây" lưu trong `localStorage` có đổi tên/xóa, nút cuộc trò chuyện mới), thanh 5 thẻ chức năng (Hỏi đáp, Tra cứu, Thuyết minh, Xu hướng, Thống kê)
+luôn thấy, và nội dung bên dưới. Màn hình chào có 4 lối tắt tới các chức năng và 6 câu gợi ý. Có chế độ tối theo hệ thống, thẻ cuộn ngang trên điện thoại.
 
-| Mục | Làm gì | API |
-|---|---|---|
-| Trò chuyện | hỏi đáp qua Gemini; trả lời kèm thẻ Nguồn (trang PDF, ảnh trang có khung đỏ, ghi chú số suy ra/đã sửa OCR), biểu đồ đường cho câu hỏi nhiều kỳ, nút Dừng/Sao chép/Tạo lại/Thử lại, 👍/👎 | `/api/ask`, `/api/feedback` |
-| Tra cứu số liệu | một chỉ tiêu, một kỳ, đọc thẳng từ dữ liệu | `/api/lookup` |
-| Thuyết minh & nguồn | tìm đoạn thuyết minh theo nội dung (tùy chọn gồm bảng số liệu), mở PDF chính thức đúng trang, xem ảnh trang nếu có | `/api/notes` |
-| Xu hướng & so sánh | biểu đồ 6 kỳ (tối đa 3 chỉ tiêu), so sánh hai kỳ, phân rã biến động lợi nhuận/doanh thu | `/api/chart` |
-| Thống kê | độ phủ dữ liệu: số kỳ, chỉ tiêu, đoạn thuyết minh, trang PDF dẫn chứng; bảng theo kỳ và ma trận chỉ tiêu × kỳ | `/api/stats` |
-
-Bốn mục sau Trò chuyện đọc thẳng dữ liệu, không cần khóa Gemini. Hàng số liệu ở màn hình chào lấy từ `/api/stats`.
-Kỳ báo cáo được đưa vào câu hỏi dưới dạng gợi ý ngữ cảnh ("Nếu không nêu kỳ, hiểu là kỳ …") vì `/api/ask` chưa nhận tham số kỳ; các mục còn lại dùng kỳ làm bộ lọc thật.
-Bản giao diện cũ giữ ở `public/index.old.html`. Mã giao diện: `js/main.js` (điều phối), `chat.js`, `views/*.js` (từng màn hình), và các module dùng chung `api.js`, `charts.js`, `sources.js`, `markdown.js`, `dom.js`, `format.js`, `state.js`, `storage.js`, `config.js`.
-
-| Trước | Sau (sáng) | Sau (tối) |
-|---|---|---|
 | ![Giao diện cũ](docs/screenshots/truoc-giao-dien-cu.png) | ![Màn hình chào](docs/screenshots/sau-man-hinh-chao-sang.png) | ![Chế độ tối](docs/screenshots/sau-man-hinh-chao-toi.png) |
 
-| Trả lời kèm nguồn và ghi chú | Thuyết minh & nguồn |
+| Trả lời kèm nguồn | Thuyết minh & nguồn |
 |---|---|
-| ![Hỏi đáp](docs/screenshots/sau-hoi-dap-nguon-ghi-chu.png) | ![Thuyết minh](docs/screenshots/sau-thuyet-minh-nguon.png) |
+| ![Hỏi đáp](docs/screenshots/sau-tra-loi-co-nguon-sang.png) | ![Thuyết minh](docs/screenshots/sau-thuyet-minh-nguon.png) |
 
 | Xu hướng & so sánh | Thống kê |
 |---|---|
 | ![Xu hướng](docs/screenshots/sau-xu-huong-so-sanh.png) | ![Thống kê](docs/screenshots/sau-thong-ke.png) |
 
-| Điện thoại | Ngăn kéo |
+| Điện thoại: Hỏi đáp | Điện thoại: Xu hướng |
 |---|---|
-| ![Điện thoại](docs/screenshots/sau-dien-thoai-man-hinh-chao.png) | ![Ngăn kéo](docs/screenshots/sau-dien-thoai-ngan-keo.png) |
+| ![Điện thoại](docs/screenshots/sau-dien-thoai-man-hinh-chao.png) | ![Xu hướng](docs/screenshots/sau-dien-thoai-xu-huong.png) |
 
 ## Chạy chatbot
 
@@ -115,4 +101,12 @@ python src/ingest/build_db.py
 python -m src.rag.chunking
 python src/ingest/render_pages.py   # ảnh các trang PDF được trích dẫn -> public/pages (dẫn chứng bên cạnh câu trả lời)
 python src/ingest/locate_rows.py    # vị trí từng dòng số liệu trên ảnh trang (khung đỏ đánh dấu dòng được trích)
+## Cách chạy code khi tải từ github xuống hãy chạy theo code sau: 
+git clone https://github.com/quanle205/chatbot_Vinamilk.git
+cd chatbot_Vinamilk
+git checkout feature/redesign-ui
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+## lấy key trên Gemini key rồi dán vào secrets.toml
 ```

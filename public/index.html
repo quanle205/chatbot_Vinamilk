@@ -18,6 +18,7 @@
   <symbol id="i-stats" viewBox="0 0 24 24"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></symbol>
   <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
   <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></symbol>
   <symbol id="i-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7M12 19V5"/></symbol>
   <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></symbol>
@@ -34,39 +35,37 @@
 </svg>
 
 <div class="app" id="app">
-  <aside class="side" id="side" aria-label="Thanh bên">
+  <header class="top">
     <div class="brand">
       <span class="logo" aria-hidden="true"><svg class="ic"><use href="#i-bars"/></svg></span>
-      <div><div class="brand-name">Phân Tích Tài Chính AI</div><div class="brand-sub">Hỏi đáp BCTC Vinamilk · Tool + RAG</div></div>
+      <div><h1 class="brand-name">Chatbot BCTC Vinamilk</h1><div class="brand-sub">Báo cáo hợp nhất Q1/2025 – Q2/2026 · có trích dẫn trang PDF</div></div>
     </div>
-    <button class="newchat" id="new-chat" type="button"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg>Cuộc trò chuyện mới</button>
-    <nav class="nav" aria-label="Chức năng">
-      <button class="nav-item" type="button" data-view="chat" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg>Trò chuyện</button>
-      <button class="nav-item" type="button" data-view="lookup"><svg class="ic" aria-hidden="true"><use href="#i-book"/></svg>Tra cứu số liệu</button>
-      <button class="nav-item" type="button" data-view="notes"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg>Thuyết minh &amp; nguồn</button>
-      <button class="nav-item" type="button" data-view="trends"><svg class="ic" aria-hidden="true"><use href="#i-zigzag"/></svg>Xu hướng &amp; so sánh</button>
-      <button class="nav-item" type="button" data-view="stats"><svg class="ic" aria-hidden="true"><use href="#i-stats"/></svg>Thống kê</button>
-    </nav>
-    <div class="label" id="recent-label">GẦN ĐÂY</div>
-    <ul class="recent" id="recent" aria-labelledby="recent-label"></ul>
     <div class="status" aria-label="Trạng thái hệ thống">
-      <div class="ind"><span class="dot" id="dot-db" aria-hidden="true"></span>DuckDB<span class="val" id="val-db">…</span></div>
-      <div class="ind"><span class="dot" id="dot-ai" aria-hidden="true"></span>Gemini<span class="val" id="val-ai">…</span></div>
+      <span class="ind"><span class="dot" id="dot-db" aria-hidden="true"></span>DuckDB <span class="val" id="val-db">…</span></span>
+      <span class="ind"><span class="dot" id="dot-ai" aria-hidden="true"></span>Gemini <span class="val" id="val-ai">…</span></span>
     </div>
-  </aside>
-  <div class="scrim" id="scrim"></div>
+    <div class="pill-wrap">
+      <button class="pill" id="period-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="period-menu">
+        <svg class="ic" aria-hidden="true"><use href="#i-cal"/></svg><span class="l">Kỳ báo cáo</span><strong id="period-label">Q2/2026</strong><svg class="ic" aria-hidden="true"><use href="#i-down"/></svg>
+      </button>
+      <ul class="menu" id="period-menu" role="menu" aria-label="Kỳ báo cáo" hidden></ul>
+    </div>
+    <div class="pill-wrap">
+      <button class="icon-btn" id="hist-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="hist-panel" aria-label="Cuộc trò chuyện gần đây" title="Gần đây"><svg class="ic"><use href="#i-clock"/></svg></button>
+      <div class="menu hist" id="hist-panel" hidden><div class="label" id="recent-label">GẦN ĐÂY</div><ul class="recent" id="recent" aria-labelledby="recent-label"></ul></div>
+    </div>
+    <button class="icon-btn" id="new-chat" type="button" aria-label="Cuộc trò chuyện mới" title="Cuộc trò chuyện mới"><svg class="ic"><use href="#i-plus"/></svg></button>
+  </header>
+
+  <nav class="tabs" aria-label="Chức năng">
+    <button class="tab" type="button" data-view="chat" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg>Hỏi đáp</button>
+    <button class="tab" type="button" data-view="lookup"><svg class="ic" aria-hidden="true"><use href="#i-book"/></svg>Tra cứu</button>
+    <button class="tab" type="button" data-view="notes"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg>Thuyết minh</button>
+    <button class="tab" type="button" data-view="trends"><svg class="ic" aria-hidden="true"><use href="#i-zigzag"/></svg>Xu hướng</button>
+    <button class="tab" type="button" data-view="stats"><svg class="ic" aria-hidden="true"><use href="#i-stats"/></svg>Thống kê</button>
+  </nav>
 
   <main class="main">
-    <header class="top">
-      <button class="icon-btn menu-btn" id="open-side" type="button" aria-label="Mở thanh bên" aria-controls="side" aria-expanded="false"><svg class="ic"><use href="#i-menu"/></svg></button>
-      <h1 class="top-title" id="top-title">Cuộc trò chuyện mới</h1>
-      <div class="pill-wrap">
-        <button class="pill" id="period-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="period-menu">
-          <svg class="ic" aria-hidden="true"><use href="#i-cal"/></svg><span class="l">Kỳ báo cáo</span><strong id="period-label">Q2/2026</strong><svg class="ic" aria-hidden="true"><use href="#i-down"/></svg>
-        </button>
-        <ul class="menu" id="period-menu" role="menu" aria-label="Kỳ báo cáo" hidden></ul>
-      </div>
-    </header>
 
     <section class="view" id="view-chat" aria-label="Trò chuyện">
       <div class="scroll" id="scroll">
@@ -74,6 +73,8 @@
           <div id="welcome">
             <h2 class="w-title">Hỏi về báo cáo tài chính Vinamilk</h2>
             <p class="w-desc">Trả lời dựa trên báo cáo tài chính hợp nhất Q1/2025 – Q2/2026. Mọi con số lấy từ cơ sở dữ liệu, có trích dẫn trang PDF và đúng với kỳ báo cáo bạn chọn (<span id="desc-period">Q2/2026</span>).</p>
+            <div class="feats" id="feats"></div>
+            <div class="label">GỢI Ý CÂU HỎI</div>
             <div class="cards" id="cards"></div>
             <div class="stats" id="stats"></div>
           </div>

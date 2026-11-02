@@ -110,3 +110,11 @@ Kiểm tra tay (Chrome headless, Gemini thật, máy chủ cục bộ): câu xu 
 3. Phản hồi có lưu nguyên văn câu hỏi; người dùng có thể gõ thông tin cá nhân vào câu hỏi. Có thể cần dòng thông báo quyền riêng tư.
 4. Giao diện chỉ hỗ trợ **đậm**; Markdown khác (`###`, `*nghiêng*`) từ Gemini vẫn hiện nguyên ký tự (đã có từ trước, chưa sửa).
 5. Chưa đo chất lượng câu trả lời diễn giải của Gemini; chỉ kiểm tra số liệu và cấu trúc.
+
+## 6. Gọn lại giao diện theo bản cũ (một cột)
+
+- Bỏ thanh bên; quay về một cột như `public/index.old.html` nhưng giữ đủ chức năng: đầu trang gọn (tên, chỉ báo DuckDB/Gemini, kỳ báo cáo, "Gần đây", cuộc trò chuyện mới)
+  và thanh 5 thẻ luôn thấy (Hỏi đáp, Tra cứu, Thuyết minh, Xu hướng, Thống kê). Bảng màu xanh đậm của bản cũ; câu gợi ý dạng viên nhỏ; màn hình chào có 4 lối tắt tới chức năng.
+- Hộp "Gần đây" thay cho danh sách ở thanh bên; hộp này và menu kỳ không mở cùng lúc, Esc đóng cả hai. Không còn ngăn kéo/`inert`/lớp phủ nên `main.js` gọn hơn.
+- Không đổi backend, API hay dữ liệu. Chart.js vẫn chỉ tải khi có biểu đồ. Test `test_api` 25/25; Chrome thật: 5 thẻ, đổi kỳ, hỏi đáp thật, đổi tên trong hộp "Gần đây", chế độ tối,
+  390 px không tràn ngang, console sạch. Đã thay các ảnh trong `docs/screenshots/`.
