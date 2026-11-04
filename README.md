@@ -1,7 +1,7 @@
 # duanNLP - Chatbot phân tích BCTC hợp nhất Vinamilk 2025-2026
 
 Chatbot hỏi đáp trên báo cáo tài chính hợp nhất của Vinamilk (quý 1/2025 – quý 2/2026): tra số liệu, tính tỷ số và
-tăng trưởng, tìm nội dung thuyết minh. Số liệu lấy từ PDF bằng OCR, đã đối chiếu thủ công; câu trả lời kèm nguồn
+tăng trưởng, vẽ xu hướng. Số liệu lấy từ PDF bằng OCR, đã đối chiếu thủ công; câu trả lời kèm nguồn
 (báo cáo, trang PDF) và cảnh báo khi một con số không khớp kết quả công cụ.
 
 | Thư mục | Nội dung |
@@ -12,7 +12,7 @@ tăng trưởng, tìm nội dung thuyết minh. Số liệu lấy từ PDF bằn
 | src/ingest | pipeline dữ liệu: `preprocess.py` (PDF -> OCR), `parse_statements.py`, `repair_identities.py`, `build_db.py` |
 | src/rag | `chunking.py`, BM25 + vector n-gam + RRF (`retriever.py`) |
 | src/tools | tra số, tỷ số, tăng trưởng, chuỗi kỳ, phân rã biến động (`explain.py`), máy tính (`TOOL_SPECS`, `call_tool`) |
-| src/notes.py, src/stats.py | tìm đoạn thuyết minh (mục Thuyết minh & nguồn) và thống kê độ phủ dữ liệu (mục Thống kê), đều không qua mô hình |
+| src/ratios.py, src/stats.py | bảng chỉ số tài chính (mục Chỉ số tài chính) và số đếm độ phủ dữ liệu (hàng số liệu ở màn hình chào), đều không qua mô hình |
 | src/web | lớp web dùng chung: giới hạn tốc độ, liên kết nguồn (PDF chính thức, ảnh trang), kiểu dữ liệu vào |
 | src/agent | agent Gemini function-calling gọi công cụ + retriever; kiểm tra số bám nguồn (`guard.py`); dựng dữ liệu biểu đồ/bảng từ kết quả công cụ (`charts.py`) |
 | src/feedback.py | lưu phản hồi 👍/👎 qua giao diện `FeedbackStore` (mặc định ghi log, tùy chọn webhook) |
@@ -25,7 +25,7 @@ tăng trưởng, tìm nội dung thuyết minh. Số liệu lấy từ PDF bằn
 - **Hỏi đáp có dẫn chứng:** câu trả lời kèm nguồn (báo cáo, trang PDF, ảnh trang có khung đánh dấu dòng) và cảnh báo số không khớp.
 - **Biểu đồ xu hướng và bảng so sánh kỳ:** khi câu hỏi dẫn tới `get_series` (xu hướng nhiều kỳ) hoặc `get_growth` (so sánh hai kỳ),
   `/api/ask` trả thêm trường `charts` (kỳ, giá trị VND, đơn vị, nguồn) dựng từ kết quả công cụ, không từ lời mô hình.
-  Giao diện vẽ cột bằng Chart.js 4.4.7 (nạp từ CDN, ghim phiên bản và SRI, chỉ khi cần) kèm bảng số liệu; câu hỏi một kỳ không có biểu đồ.
+  Giao diện vẽ đường bằng Chart.js 4.4.7 (đóng gói trong `public/js/vendor`, kiểm tra SRI, nạp khi cần) kèm bảng số liệu; câu hỏi một kỳ không có biểu đồ.
 - **Giải thích biến động (`explain_change`):** phân rã chênh lệch lợi nhuận sau thuế hoặc doanh thu thuần giữa hai kỳ (so với cùng kỳ
   năm trước hoặc quý liền trước) theo các khoản mục báo cáo KQKD; tổng đóng góp bằng đúng chênh lệch. Mô hình chỉ diễn giải, không suy đoán nguyên nhân kinh doanh.
 - **Phản hồi 👍/👎:** nút dưới mỗi câu trả lời gửi `POST /api/feedback` với `{question, answer, label: "up"|"down", timestamp?}`.
@@ -34,25 +34,57 @@ tăng trưởng, tìm nội dung thuyết minh. Số liệu lấy từ PDF bằn
 
 ## Giao diện
 
-Giao diện tĩnh (HTML + CSS + module ES thuần, không bước build), một cột như bản cũ: đầu trang (tên, chỉ báo DuckDB/Gemini từ `/api/health`, chọn kỳ báo cáo,
-hộp "Gần đây" lưu trong `localStorage` có đổi tên/xóa, nút cuộc trò chuyện mới), thanh 5 thẻ chức năng (Hỏi đáp, Tra cứu, Thuyết minh, Xu hướng, Thống kê)
-luôn thấy, và nội dung bên dưới. Màn hình chào có 4 lối tắt tới các chức năng và 6 câu gợi ý. Có chế độ tối theo hệ thống, thẻ cuộn ngang trên điện thoại.
+Giao diện tĩnh (HTML + CSS + module ES thuần, không bước build), thanh bên đơn giản kiểu Copilot: **Cuộc trò chuyện mới** và **Tìm kiếm** (lọc các cuộc trò chuyện đã lưu, gõ không dấu vẫn tìm được),
+cùng ba chức năng hay dùng nhất: **Tra cứu số liệu**, **Xu hướng & so sánh**, **Chỉ số tài chính**; bên dưới là danh sách "Cuộc trò chuyện" (đổi tên/xóa, lưu trong `localStorage`) và hai chấm DuckDB/Gemini
+từ `/api/health`. Thanh bên thu gọn được thành thanh biểu tượng (nhớ lựa chọn). Vùng nội dung có chọn kỳ báo cáo, màn hình chào với 3 lối tắt chức năng, 6 câu gợi ý và hàng số liệu thật.
+Phím tắt: `Ctrl/Cmd+K` tìm kiếm, `/` vào ô nhập. Tông xanh chàm, điểm nhấn xanh ngọc/tím; nút Sáng/Tối ở cuối thanh bên trái nhớ lựa chọn. Khi chưa chọn, giao diện theo hệ thống. Thanh bên thành ngăn kéo dưới 900 px. Biểu đồ đổi màu cùng giao diện.
 
 | ![Giao diện cũ](docs/screenshots/truoc-giao-dien-cu.png) | ![Màn hình chào](docs/screenshots/sau-man-hinh-chao-sang.png) | ![Chế độ tối](docs/screenshots/sau-man-hinh-chao-toi.png) |
 
-| Trả lời kèm nguồn | Thuyết minh & nguồn |
+| Chỉ số tài chính | Tìm kiếm cuộc trò chuyện |
 |---|---|
-| ![Hỏi đáp](docs/screenshots/sau-tra-loi-co-nguon-sang.png) | ![Thuyết minh](docs/screenshots/sau-thuyet-minh-nguon.png) |
+| ![Chỉ số](docs/screenshots/sau-chi-so-tai-chinh.png) | ![Tìm kiếm](docs/screenshots/sau-tim-kiem.png) |
 
-| Xu hướng & so sánh | Thống kê |
+| Trả lời kèm nguồn | Xu hướng & so sánh |
 |---|---|
-| ![Xu hướng](docs/screenshots/sau-xu-huong-so-sanh.png) | ![Thống kê](docs/screenshots/sau-thong-ke.png) |
+| ![Hỏi đáp](docs/screenshots/sau-tra-loi-co-nguon-sang.png) | ![Xu hướng](docs/screenshots/sau-xu-huong-so-sanh.png) |
 
-| Điện thoại: Hỏi đáp | Điện thoại: Xu hướng |
-|---|---|
-| ![Điện thoại](docs/screenshots/sau-dien-thoai-man-hinh-chao.png) | ![Xu hướng](docs/screenshots/sau-dien-thoai-xu-huong.png) |
+| Điện thoại | Ngăn kéo | Thanh bên thu gọn |
+|---|---|---|
+| ![Điện thoại](docs/screenshots/sau-dien-thoai-man-hinh-chao.png) | ![Ngăn kéo](docs/screenshots/sau-dien-thoai-ngan-keo.png) | ![Thu gọn](docs/screenshots/sau-thanh-ben-thu-gon.png) |
 
 ## Chạy chatbot
+
+### Thành viên nhóm: chạy cùng phiên bản
+
+Bản giao diện hiện tại ở nhánh `main`. Dùng Python 3.13 và các phiên bản thư viện trong `requirements.txt`.
+
+```powershell
+git clone --branch main https://github.com/quanle205/chatbot_Vinamilk.git
+cd chatbot_Vinamilk
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+Copy-Item .streamlit/secrets.example.toml .streamlit/secrets.toml
+# Mở secrets.toml, thay PASTE_YOUR_OWN_KEY_HERE bằng key của bạn.
+.\chay.bat
+```
+
+Nếu đã có repo: chuyển sang `main`, chạy `git pull --ff-only origin main` và cài lại `requirements.txt` trong môi trường ảo. Nếu có thay đổi chưa lưu, commit hoặc stash trước khi chuyển nhánh. Dữ liệu DuckDB, các đoạn truy xuất và ảnh dẫn chứng đã có trong repo; không cần chạy OCR lại.
+
+### Thành viên nhóm: triển khai Vercel
+
+1. Import repository này vào Vercel (hoặc fork nếu tài khoản không được phép import).
+2. Chọn nhánh triển khai **main**. Trong Settings → Git, đặt **Production Branch** là `main`; nhánh mặc định khác có thể chứa giao diện cũ.
+3. Root Directory là thư mục gốc repo. Framework Preset: **Other**. Giữ Build Command và Output Directory ở mặc định, không nhập `public` làm Root Directory.
+4. Trong Environment Variables, thêm `GEMINI_API_KEY` bằng key riêng, không có dấu ngoặc kép; áp dụng cho Production và Preview nếu dùng.
+5. Nếu cần chọn mô hình, thêm `GEMINI_MODEL` và `GEMINI_FALLBACK_MODELS` (danh sách phân cách bằng dấu phẩy) theo các tên khả dụng với key. Mặc định hiện tại xem `src/agent/agent.py`; key mới không bảo đảm có quyền dùng mọi mô hình.
+6. Deploy. Sau khi sửa key hoặc biến môi trường, **Redeploy** để áp dụng. `secrets.toml` không được đưa lên GitHub và không được Vercel đọc.
+7. Mở `/api/health`: cần `ok: true`, `periods: 6`, `gemini_key: true`. Trường `gemini_key` chỉ kiểm tra có cấu hình key, không xác minh key hợp lệ. Thử thêm một câu hỏi để kiểm tra Gemini.
+
+Mã nguồn, dữ liệu và giao diện sẽ giống nhau khi dùng cùng commit. Lịch sử trò chuyện, chế độ sáng/tối được lưu riêng trong từng trình duyệt; câu trả lời AI còn phụ thuộc key, mô hình và hạn mức.
+
+Kiểm tra UI tự động: cài Playwright trong môi trường kiểm thử, có Microsoft Edge, chạy server rồi `node tests/ui_smoke.cjs` (mặc định `http://127.0.0.1:8017`, đổi bằng `UI_TEST_URL`). Test dùng API dữ liệu thật và phản hồi Gemini giả lập.
 
 Triển khai trên Vercel: import repo, Framework **Other** (không đổi Build Command), đặt biến môi trường `GEMINI_API_KEY`
 (khóa Gemini miễn phí tại aistudio.google.com/apikey; tùy chọn `GEMINI_MODEL`, mặc định `gemini-3.8-flash`). Không commit khóa lên git.
@@ -67,7 +99,7 @@ set GEMINI_API_KEY=khoa-cua-ban
 python -m uvicorn api.index:app --port 8000
 ```
 
-Không có khóa thì mục Trò chuyện báo "chưa sẵn sàng", bốn mục còn lại vẫn dùng được. Giới hạn mỗi phút theo IP: `RATE_LIMIT_PER_MINUTE` (hỏi đáp, mặc định 6), `BROWSE_LIMIT_PER_MINUTE` (tra cứu, thuyết minh, biểu đồ; mặc định 30), `FEEDBACK_LIMIT_PER_MINUTE` (mặc định 20).
+Không có khóa thì mục Trò chuyện báo "chưa sẵn sàng", các mục Tra cứu, Xu hướng, Chỉ số tài chính vẫn dùng được. Giới hạn mỗi phút theo IP: `RATE_LIMIT_PER_MINUTE` (hỏi đáp, mặc định 6), `BROWSE_LIMIT_PER_MINUTE` (tra cứu, thuyết minh, biểu đồ; mặc định 30), `FEEDBACK_LIMIT_PER_MINUTE` (mặc định 20).
 
 ## Kiểm thử
 

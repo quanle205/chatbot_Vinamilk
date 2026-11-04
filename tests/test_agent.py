@@ -13,7 +13,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from google.genai import types  # noqa: E402
 
-from src.agent.agent import REFUSAL_TEXT, AgentConfigError, VinamilkAgent, _clean_schema, make_client  # noqa: E402
+from src.agent.agent import REFUSAL_TEXT, AgentConfigError, ToolCall, VinamilkAgent, _clean_schema, make_client  # noqa: E402
+from src.agent.answer import tidy_answer, used_sources  # noqa: E402
 from src.agent.guard import find_unsupported_numbers, numbers_in_text  # noqa: E402
 from src.agent.prompts import SYSTEM_PROMPT  # noqa: E402
 from src.agent.toolbox import Toolbox  # noqa: E402
@@ -321,6 +322,28 @@ def test_intent_dataset_has_no_metric_or_template_leak():
     assert not set(TRA_SO_TRAIN) & set(TRA_SO_TEST)
     assert {l for _, l in d["train"]} == {l for _, l in d["test"]} == {"tra_so", "ty_so", "so_sanh", "thuyet_minh", "ngoai_pham_vi"}
     assert not {q for q, _ in d["train"]} & {q for q, _ in d["test"]}              # không câu nào xuất hiện ở cả hai tập
+
+
+def test_tidy_answer_drops_inline_citations_but_keeps_content():
+    nl = chr(10)
+    assert tidy_answer("Doanh thu là 18.847,3 tỷ đồng." + nl * 2 + "*Nguồn: Báo cáo KQKD quý 2/2026 (trang PDF 11, mã 10).*") == "Doanh thu là 18.847,3 tỷ đồng."
+    assert tidy_answer("- Doanh thu: 16.148,7 tỷ *(Báo cáo KQKD, trang 11)*" + nl + "- Lãi: 2.458,2 tỷ *(Báo cáo KQKD, trang 11)*") == "- Doanh thu: 16.148,7 tỷ" + nl + "- Lãi: 2.458,2 tỷ"
+    assert tidy_answer("Lãi là 3.184,4 tỷ đồng (theo Báo cáo kết quả hoạt động kinh doanh trang PDF 12, mã 60).") == "Lãi là 3.184,4 tỷ đồng."
+    keep = "Số cùng kỳ đã phân loại lại (xem thuyết minh trang 25 để đối chiếu)."
+    assert tidy_answer(keep) == keep                                            # trang trong lời giải thích thường: giữ nguyên
+    assert tidy_answer("*(Lưu ý: số tính lại; nguồn: Báo cáo KQKD, trang PDF 11).*").startswith("*(Lưu ý")     # lưu ý không bị xóa
+
+
+def test_used_sources_keeps_only_tools_whose_numbers_are_in_the_answer():
+    a = ToolCall("get_metric", {}, True, "", {"text": "Doanh thu 18.847.347.464.988", "value": 18847347464988.0, "sources": [{"doc": "q2-2026", "page": 11}]})
+    b = ToolCall("get_metric", {}, True, "", {"text": "Tài sản 55.429.011.127.169", "value": 55429011127169.0, "sources": [{"doc": "q1-2026", "page": 9}]})
+    bad = ToolCall("get_metric", {}, False, "", {"sources": [{"doc": "q4-2025", "page": 1}]})
+    assert used_sources("Doanh thu quý 2/2026 là 18.847,3 tỷ đồng.", [a, b, bad]) == [{"doc": "q2-2026", "page": 11}]
+    assert used_sources("Số liệu nằm trong thuyết minh.", [a, b]) == [{"doc": "q2-2026", "page": 11}, {"doc": "q1-2026", "page": 9}]   # không có số: giữ hết
+
+
+def test_prompt_asks_for_direct_answers_without_source_lines():
+    assert "Không viết dòng \"Nguồn:\"" in SYSTEM_PROMPT and "Câu đầu tiên trả lời thẳng" in SYSTEM_PROMPT
 
 
 if __name__ == "__main__":

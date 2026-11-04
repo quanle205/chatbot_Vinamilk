@@ -14,7 +14,7 @@ const MAX_HISTORY_MESSAGES = 12;          // 6 lượt hỏi-đáp gửi kèm m�
 const NEW_TITLE = "Cuộc trò chuyện mới";
 
 let ui;                                   // {showView, closeSide, refreshTitle, unavailable}: do main.js truyền vào để không phụ thuộc vòng
-let convs = [], cur = null, busy = false, ctrl = null;
+let convs = [], cur = null, busy = false, ctrl = null, filter = "";
 const input = () => $("q");
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
@@ -63,32 +63,41 @@ function actionBar(msg, isLast) {
   return bar;
 }
 
+const avatar = () => h("span", { class: "avatar", "aria-hidden": "true" }, icon("spark"));
+
 function botEl(msg, isLast) {
-  const wrap = h("div", { class: "msg bot" });
+  const body = h("div", { class: "body" });
+  const wrap = h("div", { class: "msg bot" }, avatar(), body);
   if (msg.pending) {
-    wrap.append(h("div", { class: "typing", role: "status" }, "Đang tra cứu", h("i"), h("i"), h("i")));
+    body.append(h("div", { class: "typing", role: "status" }, "Đang tra cứu", h("i"), h("i"), h("i")), h("div", { class: "skel", "aria-hidden": "true" }, h("i"), h("i")));
     return wrap;
   }
   if (msg.error) {
-    wrap.append(h("div", { class: "errbox", role: "alert" }, h("div", { text: msg.error }),
+    body.append(h("div", { class: "errbox", role: "alert" }, h("div", { text: msg.error }),
       h("button", { class: "btn", type: "button", onclick: () => retry(msg) }, icon("redo"), "Thử lại")));
     return wrap;
   }
   const unsupported = msg.unsupported || [];
-  return h("div", { class: "msg bot" }, markdown(msg.text),
+  const parts = [markdown(msg.text),
     unsupported.length ? h("div", { class: "warn", role: "note" }, "Các số sau trong câu trả lời ", h("strong", { text: "không khớp" }), ` kết quả tra cứu, hãy kiểm tra lại: ${unsupported.join(", ")}`) : null,
     (msg.warnings || []).map(w => h("div", { class: "warn", role: "note", text: w })),
-    chartsEl(msg.charts), sourcesEl(msg.sources, msg.notes), actionBar(msg, isLast));
+    chartsEl(msg.charts), sourcesEl(msg.sources, msg.notes), actionBar(msg, isLast)];
+  body.append(...parts.flat().filter(Boolean));                               // append(null) sẽ chèn chữ "null" vào trang
+  return wrap;
 }
 
 function msgEl(msg, i) {
   return msg.role === "user" ? h("div", { class: "msg user" }, h("div", { class: "bubble", text: msg.text })) : botEl(msg, i === cur.msgs.length - 1);
 }
 
-function renderConv() {
+function renderConv(fresh = false) {                      // fresh: chỉ tin nhắn cuối chạy hiệu ứng xuất hiện (không phát lại cả hội thoại)
   const log = $("log"); log.replaceChildren();
   $("welcome").hidden = !!(cur && cur.msgs.length);
-  if (cur) cur.msgs.forEach((m, i) => log.append(msgEl(m, i)));
+  if (cur) cur.msgs.forEach((m, i) => {
+    const el = msgEl(m, i);
+    if (fresh && i >= cur.msgs.length - 2) el.classList.add("fresh");
+    log.append(el);
+  });
   ui.refreshTitle();
   const scroller = $("scroll"); scroller.scrollTop = scroller.scrollHeight;
 }
@@ -108,7 +117,7 @@ function historyBefore(index) {                         // các cặp hỏi-đá
 
 function chatError(status, data) {
   if (status === 422) return "Câu hỏi chưa hợp lệ (tối đa 500 ký tự). Bạn rút gọn rồi thử lại nhé.";
-  if (status === 503) return "Trợ lý chưa sẵn sàng (có thể thiếu khóa Gemini). Bạn vẫn có thể dùng thẻ Tra cứu hoặc Thuyết minh.";
+  if (status === 503) return "Trợ lý chưa sẵn sàng (có thể thiếu khóa Gemini). Bạn vẫn có thể dùng mục Tra cứu số liệu ở thanh bên.";
   return errorText(status, data);
 }
 
@@ -131,7 +140,7 @@ async function ask(question, regenerate = false) {
   const bot = { role: "bot", pending: true, question };
   cur.msgs.push(bot);
   cur.updated = Date.now();
-  renderConv(); renderRecent(); setBusy(true);
+  renderConv(true); renderRecent(); setBusy(true);
   ctrl = new AbortController();
   try {
     const r = await post("/api/ask", { question: withPeriod(question), history: historyBefore(cur.msgs.length - 1) }, ctrl.signal);
@@ -144,7 +153,7 @@ async function ask(question, regenerate = false) {
     bot.error = e.name === "AbortError" ? "Đã dừng trả lời." : e.http ? e.message : NETWORK_ERROR;
     if (e.http === 503) ui.unavailable();
   } finally {
-    ctrl = null; cur.updated = Date.now(); persist(); setBusy(false); renderConv(); renderRecent();
+    ctrl = null; cur.updated = Date.now(); persist(); setBusy(false); renderConv(true); renderRecent();
   }
 }
 
@@ -155,11 +164,16 @@ function retry(msg) {                                   // bỏ câu trả lời
   ask(msg.question, true);
 }
 
-// ------------------------------------------------------------------ hộp "Gần đây": các cuộc trò chuyện đã lưu
+// ------------------------------------------------------------------ thanh bên: cuộc trò chuyện gần đây
+const fold = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").toLowerCase();      // gõ không dấu vẫn tìm được
+const matches = c => !filter || fold(c.title + " " + c.msgs.map(m => m.text || "").join(" ")).includes(filter);
+export function setFilter(q) { filter = fold(q.trim()); renderRecent(); }
+
 function renderRecent() {
   const list = $("recent"); list.replaceChildren();
-  if (!convs.length) { list.append(h("li", { class: "recent-empty", text: "Chưa có cuộc trò chuyện nào" })); return; }
-  [...convs].sort((a, b) => b.updated - a.updated).forEach(c => {
+  const shown = [...convs].sort((a, b) => b.updated - a.updated).filter(matches);
+  if (!shown.length) { list.append(h("li", { class: "recent-empty", text: filter ? "Không tìm thấy cuộc trò chuyện phù hợp" : "Chưa có cuộc trò chuyện nào" })); return; }
+  shown.forEach(c => {
     const active = cur && cur.id === c.id;
     const li = h("li", { class: "conv" + (active ? " active" : "") });
     const del = h("button", { class: "conv-act", type: "button", "aria-label": `Xóa cuộc trò chuyện ${c.title}`, title: "Xóa" }, icon("trash"));

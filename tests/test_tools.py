@@ -8,7 +8,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.notes import search_notes  # noqa: E402
 from src.stats import build_coverage  # noqa: E402
 from src.tools.analyst import Analyst  # noqa: E402
 from src.tools.calc import calculate  # noqa: E402
@@ -211,36 +210,6 @@ def test_coverage_counts_match_the_data():
     rev = next(m for m in c["metrics"] if m["key"] == "doanh_thu_thuan")
     assert rev["have"] == [True] * 6                                         # doanh thu thuần có ở cả 6 báo cáo (mã 10 theo cả TT200 và TT99)
     assert next(m for m in c["metrics"] if m["key"] == "tong_tai_san")["have"] == [True] * 6      # mã 270 (TT200) và 280 (TT99) đều được ánh xạ
-
-
-class _FakeRetriever:
-    """Bộ truy xuất giả trả đúng thứ tự định sẵn, để kiểm tra lọc/cắt của search_notes mà không phải dựng chỉ mục thật."""
-    def __init__(self, chunks):
-        self.chunks, self.calls = chunks, []
-
-    def search(self, query, k=6, docs=None, **_):
-        self.calls.append((k, docs))
-        return [type("Hit", (), {"chunk": c, "score": 1.0, "ranks": {}})() for c in self.chunks if not docs or c["doc"] in docs][:k]
-
-
-def _chunk(i, kind="van_ban", text=None):
-    return {"id": f"c{i}", "doc": "q2-2026", "quarter": "Q2", "year": 2026, "page": i, "kind": kind, "section": "Thuyết minh", "heading": "15. Vay",
-            "text": text or f"[Q2/2026 · Thuyết minh · trang {i}]" + chr(10) + f"Nội dung đoạn {i}"}
-
-
-def test_search_notes_filters_tables_trims_header_and_truncates():
-    chunks = [_chunk(1, "bang_so_lieu"), _chunk(2), _chunk(3, text="[Q2/2026 · Thuyết minh · trang 3]" + chr(10) + "x" * 3000), _chunk(4)]
-    fake = _FakeRetriever(chunks)
-    got = search_notes(fake, "vay", "Q2/2026", include_tables=False, k=2)
-    assert [g["id"] for g in got] == ["c2", "c3"] and fake.calls[0] == (6, {"q2-2026"})            # lấy dư (k*3) rồi bỏ bảng số liệu
-    assert got[0]["text"] == "Nội dung đoạn 2" and not got[0]["truncated"]                          # bỏ dòng tiêu đề "[Q2/2026 · ...]"
-    assert len(got[1]["text"]) == 2500 and got[1]["truncated"] is True
-    assert [g["id"] for g in search_notes(fake, "vay", None, include_tables=True, k=2)] == ["c1", "c2"]
-    try:
-        search_notes(fake, "vay", "kỳ nào đó")
-        raise AssertionError("kỳ sai phải bị từ chối")
-    except ValueError:
-        pass
 
 
 if __name__ == "__main__":

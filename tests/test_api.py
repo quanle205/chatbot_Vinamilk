@@ -33,7 +33,7 @@ def test_health_and_static_page():
     assert client.get("/api/health").json()["ok"] is True
     page = client.get("/")
     assert page.status_code == 200 and "Chatbot BCTC Vinamilk" in page.text and "/js/main.js" in page.text
-    for path, marker in (("/js/main.js", "import"), ("/js/chat.js", "/api/ask"), ("/css/app.css", ":root")):      # css/js tĩnh được phục vụ cục bộ như trên Vercel
+    for path, marker in (("/js/main.js", "import"), ("/js/chat.js", "/api/ask"), ("/css/app.css", ":root"), ("/js/theme.js", "theme-toggle"), ("/js/vendor/chart.umd.min.js", "Chart.js v4.4.7")):      # css/js tĩnh được phục vụ cục bộ như trên Vercel
         r = client.get(path)
         assert r.status_code == 200 and marker in r.text, path
     assert client.get("/js/main.js").headers["content-type"].startswith(("application/javascript", "text/javascript"))   # module cần đúng kiểu MIME
@@ -242,29 +242,34 @@ def test_stats_coverage_counts_come_from_the_data():
     assert revenue["have"] == [True] * 6 and revenue["statement"] == "KQKD"
 
 
-def test_notes_search_returns_ocr_text_with_page_source():
+def test_ratios_endpoint_matches_ratio_tool_with_delta_history_and_sources():
     reset()
-    r = client.post("/api/notes", json={"query": "các khoản vay ngắn hạn ngân hàng", "period": "Q2/2026", "k": 5})
+    r = client.post("/api/ratios", json={"period": "Q2/2026"})
     assert r.status_code == 200, r.text
-    res = r.json()["results"]
-    assert 1 <= len(res) <= 5 and all(x["doc"] == "q2-2026" and x["kind"] == "van_ban" for x in res)          # đúng kỳ, chỉ thuyết minh
-    first = res[0]
-    assert first["text"] and not first["text"].startswith("[") and first["page"] and first["source"]["doc"] == "q2-2026"
-    assert first["source"]["image"] == f"/pages/q2-2026/{first['page']}.webp" or first["source"]["image"] is None
-    assert first["source"]["url"].endswith(f"#page={first['page']}") and first["source"]["is_pdf"] is True        # mở PDF chính thức đúng trang
-    old = client.post("/api/notes", json={"query": "các khoản vay", "period": "Q4/2025", "k": 2}).json()["results"][0]["source"]
-    assert old["is_pdf"] is False and "#page" not in old["url"]                                              # kỳ chưa có liên kết PDF: về trang báo cáo của Vinamilk
-    tables = client.post("/api/notes", json={"query": "doanh thu thuần lợi nhuận", "period": "Q1/2026", "include_tables": True, "k": 6}).json()["results"]
-    assert any(x["kind"] == "bang_so_lieu" for x in tables)
-    anyperiod = client.post("/api/notes", json={"query": "thuế thu nhập doanh nghiệp hoãn lại"}).json()["results"]
-    assert len({x["doc"] for x in anyperiod}) > 1                                                       # bỏ trống kỳ = tìm mọi kỳ
+    d = r.json()
+    assert d["period"] == "Q2/2026" and d["compare_period"] == "Q1/2026" and d["compare_label"] == "quý liền trước"
+    assert [g["name"] for g in d["groups"]] == ["Sinh lời", "Chi phí", "Thanh khoản", "Đòn bẩy", "Hoạt động"]
+    items = {i["key"]: i for g in d["groups"] for i in g["items"]}
+    assert len(items) == 14 and all(i["value"] is not None for i in items.values())
+    tool = api.call_tool("get_ratio", {"ratio": "biên lợi nhuận gộp", "period": "Q2/2026"})
+    gm = items["bien_loi_nhuan_gop"]
+    assert gm["value"] == tool["value"] and gm["unit"] == "%" and [h["period"] for h in gm["history"]][0] == "Q1/2025" and len(gm["history"]) == 6
+    prior = next(h["value"] for h in gm["history"] if h["period"] == "Q1/2026")
+    assert abs(gm["delta"] - (gm["value"] - prior)) < 1e-12                    # thay đổi so với quý liền trước tính từ chính lịch sử đó
+    assert gm["sources"] and gm["sources"][0]["page"] and gm["sources"][0]["url"].startswith("https://")
+    assert abs(items["roe"]["annualized"] - items["roe"]["value"] * 4) < 1e-12              # ROE theo quý quy năm ×4
 
 
-def test_notes_validation():
+def test_ratios_basis_and_validation():
     reset()
-    assert client.post("/api/notes", json={"query": "x"}).status_code == 422                            # quá ngắn
-    assert client.post("/api/notes", json={"query": "vay", "k": 99}).status_code == 422
-    assert client.post("/api/notes", json={"query": "vay ngắn hạn", "period": "kỳ nào đó"}).status_code == 422
+    ytd = client.post("/api/ratios", json={"period": "Q2/2026", "basis": "luy_ke"}).json()
+    assert ytd["compare_label"] == "cùng kỳ năm trước" and ytd["compare_period"] == "Q2/2025"
+    first = client.post("/api/ratios", json={"period": "Q1/2025"}).json()
+    gross = next(i for g in first["groups"] for i in g["items"] if i["key"] == "bien_loi_nhuan_gop")
+    assert gross["delta"] is None                                              # kỳ đầu tiên chưa có kỳ trước để so sánh
+    assert client.post("/api/ratios", json={"period": "Q3/2030"}).status_code == 422
+    assert client.post("/api/ratios", json={"period": "kỳ nào đó"}).status_code == 422
+    assert client.post("/api/ratios", json={"period": "Q2/2026", "basis": "x"}).status_code == 422
 
 
 def test_chart_endpoint_series_with_summary_and_no_gemini():

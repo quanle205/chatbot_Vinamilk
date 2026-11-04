@@ -44,15 +44,19 @@ def numbers_in_result(obj) -> list[float]:
     return out
 
 
+def matches_pool(n: float, dec: int, pool: list[float]) -> bool:
+    """Số `n` (viết với `dec` chữ số thập phân) có khớp một số trong `pool` ở đơn vị VND/nghìn/triệu/tỷ hoặc tỷ lệ/phần trăm không."""
+    tol = 0.5 * 10 ** (-dec) * 1.001
+    n_abs = abs(n)
+    return any(abs(n_abs - abs(t) / s) <= tol or abs(n_abs - abs(t) * s) <= tol for t in pool for s in SCALES)
+
+
 def find_unsupported_numbers(answer: str, tool_results: list) -> list[str]:
     """Trả về các số trong câu trả lời không khớp số nào trong kết quả công cụ (theo mọi đơn vị)."""
     pool = numbers_in_result(tool_results)
     bad = []
     for m in NUM_RE.finditer(answer):
         n, dec = parse_vn(m.group(0))
-        tol = 0.5 * 10 ** (-dec) * 1.001
-        n_abs = abs(n)
-        if any(abs(n_abs - abs(t) / s) <= tol or abs(n_abs - abs(t) * s) <= tol for t in pool for s in SCALES):
-            continue
-        bad.append(m.group(0))
+        if not matches_pool(n, dec, pool):
+            bad.append(m.group(0))
     return bad

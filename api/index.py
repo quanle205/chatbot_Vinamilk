@@ -1,7 +1,7 @@
 """API cho bản triển khai Vercel (hàm serverless). Giao diện là trang tĩnh public/ gọi các đường dẫn /api/*.
 
 Hàm serverless không giữ trạng thái giữa các lần gọi, nên lịch sử hội thoại do trình duyệt gửi lên mỗi lượt (chỉ dạng văn bản hỏi-đáp).
-Đường dẫn:  /api/ask (hỏi đáp, qua Gemini)  /api/lookup  /api/chart  /api/notes  /api/stats (đọc thẳng dữ liệu, không qua mô hình)
+Đường dẫn:  /api/ask (hỏi đáp, qua Gemini)  /api/lookup  /api/chart  /api/ratios  /api/stats (đọc thẳng dữ liệu, không qua mô hình)
             /api/feedback  /api/health
 Biến môi trường: GEMINI_API_KEY (bắt buộc cho /api/ask), GEMINI_MODEL, MAX_HISTORY_TURNS, ASK_DEADLINE_S;
 giới hạn mỗi phút: RATE_LIMIT_PER_MINUTE (hỏi đáp), BROWSE_LIMIT_PER_MINUTE (tra cứu/biểu đồ/thuyết minh), FEEDBACK_LIMIT_PER_MINUTE;
@@ -25,11 +25,11 @@ from src.agent import AgentConfigError, VinamilkAgent  # noqa: E402
 from src.agent.charts import build_charts  # noqa: E402
 from src.agent.toolbox import Toolbox  # noqa: E402
 from src.feedback import get_store, make_record  # noqa: E402
-from src.notes import search_notes  # noqa: E402
+from src.ratios import build_ratios  # noqa: E402
 from src.stats import coverage  # noqa: E402
 from src.tools.registry import analyst, call_tool  # noqa: E402
 from src.web.ratelimit import RateLimiter  # noqa: E402
-from src.web.schemas import AskBody, ChartBody, FeedbackBody, LookupBody, NotesBody  # noqa: E402
+from src.web.schemas import AskBody, ChartBody, FeedbackBody, LookupBody, RatiosBody  # noqa: E402
 from src.web.sources import OFFICIAL_PDF_URLS, OFFICIAL_REPORTS_URL, collect_notes, source_links  # noqa: E402
 
 mimetypes.add_type("application/javascript", ".js")       # Windows đôi khi gán .js là text/plain, làm trình duyệt từ chối nạp module
@@ -132,15 +132,18 @@ def chart(body: ChartBody, request: Request):
     return {"charts": build_charts(calls)}
 
 
-@app.post("/api/notes")
-def notes(body: NotesBody, request: Request):
-    """Tìm đoạn thuyết minh theo nội dung, kèm nguồn (trang PDF, ảnh trang) cho mục Thuyết minh & nguồn."""
+@app.post("/api/ratios")
+def ratios(body: RatiosBody, request: Request):
+    """Bảng chỉ số tài chính của một kỳ (mục Chỉ số tài chính): gọi thẳng công cụ tính tỷ số, không qua Gemini."""
     BROWSE_LIMIT.check(request)
     try:
-        hits = search_notes(get_toolbox().retriever, body.query, body.period, body.include_tables, body.k)
+        res = build_ratios(analyst(), body.period, body.basis)
     except ValueError as e:
         raise HTTPException(422, str(e))
-    return {"results": [{**h, "source": source_links([{"doc": h["doc"], "statement": h["heading"], "page": h["page"], "code": "-"}])[0]} for h in hits]}
+    for group in res["groups"]:
+        for item in group["items"]:
+            item["sources"] = source_links(item.get("sources", []))
+    return res
 
 
 @app.post("/api/feedback")

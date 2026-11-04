@@ -2,23 +2,26 @@
 <html lang="vi">
 <head>
 <meta charset="utf-8">
+<meta name="theme-color" content="#4f46e5">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chatbot Phân Tích Tài Chính</title>
-<meta name="description" content="Chatbot BCTC Vinamilk: hỏi đáp trên báo cáo tài chính hợp nhất Q1/2025 – Q2/2026, có trích dẫn trang PDF.">
+<title>FINANCE AI · Chatbot BCTC Vinamilk</title>
+<meta name="description" content="Chatbot báo cáo tài chính Vinamilk: hỏi đáp trên báo cáo tài chính hợp nhất Q1/2025 – Q2/2026, có trích dẫn trang PDF.">
 <link rel="icon" href="data:,">
+<script src="/js/theme.js"></script>
 <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
-  <symbol id="i-bars" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M8 17v-5"/><path d="M13 17V8"/><path d="M18 17v-9"/></symbol>
-  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
   <symbol id="i-book" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></symbol>
-  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></symbol>
   <symbol id="i-zigzag" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></symbol>
-  <symbol id="i-stats" viewBox="0 0 24 24"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></symbol>
   <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
   <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
-  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-ratio" viewBox="0 0 24 24"><path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17v4M17 19h4"/></symbol>
+  <symbol id="i-arrow-down" viewBox="0 0 24 24"><path d="M12 5v14M19 12l-7 7-7-7"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></symbol>
   <symbol id="i-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7M12 19V5"/></symbol>
   <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></symbol>
@@ -35,39 +38,44 @@
 </svg>
 
 <div class="app" id="app">
-  <header class="top">
-    <div class="brand">
-      <span class="logo" aria-hidden="true"><svg class="ic"><use href="#i-bars"/></svg></span>
-      <div><h1 class="brand-name">Chatbot BCTC Vinamilk</h1><div class="brand-sub">Báo cáo hợp nhất Q1/2025 – Q2/2026 · có trích dẫn trang PDF</div></div>
+  <aside class="side" id="side" aria-label="Thanh Bên">
+    <div class="side-head">
+      <span class="brand-name t">FINANCE AI</span>
+      <button class="icon-btn rail-btn" id="rail" type="button" aria-label="Thu gọn thanh bên" aria-pressed="false" title="Thu gọn / mở rộng"><svg class="ic"><use href="#i-panel"/></svg></button>
     </div>
+    <nav class="nav" aria-label="Chức Năng">
+      <button class="nav-item primary" id="new-chat" type="button"><span class="plus" aria-hidden="true"><svg class="ic"><use href="#i-plus"/></svg></span><span class="t">Cuộc trò chuyện mới</span></button>
+      <button class="nav-item" id="search-btn" type="button" title="Tìm kiếm (Ctrl+K)" aria-expanded="false" aria-controls="search-box"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg><span class="t">Tìm kiếm</span></button>
+      <div class="search-box t" id="search-box" hidden><input id="search-q" type="search" maxlength="80" placeholder="Tìm trong các cuộc trò chuyện" aria-label="Tìm trong các cuộc trò chuyện" autocomplete="off"></div>
+      <button class="nav-item" type="button" data-view="lookup"><svg class="ic" aria-hidden="true"><use href="#i-book"/></svg><span class="t">Tra cứu số liệu</span></button>
+      <button class="nav-item" type="button" data-view="trends"><svg class="ic" aria-hidden="true"><use href="#i-zigzag"/></svg><span class="t">Xu hướng &amp; so sánh</span></button>
+      <button class="nav-item" type="button" data-view="ratios"><svg class="ic" aria-hidden="true"><use href="#i-ratio"/></svg><span class="t">Chỉ số tài chính</span></button>
+    </nav>
+    <div class="label t" id="recent-label">Cuộc trò chuyện</div>
+    <ul class="recent" id="recent" aria-labelledby="recent-label"></ul>
     <div class="status" aria-label="Trạng thái hệ thống">
-      <span class="ind"><span class="dot" id="dot-db" aria-hidden="true"></span>DuckDB <span class="val" id="val-db">…</span></span>
-      <span class="ind"><span class="dot" id="dot-ai" aria-hidden="true"></span>Gemini <span class="val" id="val-ai">…</span></span>
+      <div class="ind"><span class="dot" id="dot-db" aria-hidden="true"></span><span class="t">DuckDB</span><span class="val t" id="val-db">…</span></div>
+      <div class="ind"><span class="dot" id="dot-ai" aria-hidden="true"></span><span class="t">Gemini</span><span class="val t" id="val-ai">…</span></div>
     </div>
-    <div class="pill-wrap">
-      <button class="pill" id="period-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="period-menu">
-        <svg class="ic" aria-hidden="true"><use href="#i-cal"/></svg><span class="l">Kỳ báo cáo</span><strong id="period-label">Q2/2026</strong><svg class="ic" aria-hidden="true"><use href="#i-down"/></svg>
-      </button>
-      <ul class="menu" id="period-menu" role="menu" aria-label="Kỳ báo cáo" hidden></ul>
-    </div>
-    <div class="pill-wrap">
-      <button class="icon-btn" id="hist-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="hist-panel" aria-label="Cuộc trò chuyện gần đây" title="Gần đây"><svg class="ic"><use href="#i-clock"/></svg></button>
-      <div class="menu hist" id="hist-panel" hidden><div class="label" id="recent-label">GẦN ĐÂY</div><ul class="recent" id="recent" aria-labelledby="recent-label"></ul></div>
-    </div>
-    <button class="icon-btn" id="new-chat" type="button" aria-label="Cuộc trò chuyện mới" title="Cuộc trò chuyện mới"><svg class="ic"><use href="#i-plus"/></svg></button>
-  </header>
-
-  <nav class="tabs" aria-label="Chức năng">
-    <button class="tab" type="button" data-view="chat" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg>Hỏi đáp</button>
-    <button class="tab" type="button" data-view="lookup"><svg class="ic" aria-hidden="true"><use href="#i-book"/></svg>Tra cứu</button>
-    <button class="tab" type="button" data-view="notes"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg>Thuyết minh</button>
-    <button class="tab" type="button" data-view="trends"><svg class="ic" aria-hidden="true"><use href="#i-zigzag"/></svg>Xu hướng</button>
-    <button class="tab" type="button" data-view="stats"><svg class="ic" aria-hidden="true"><use href="#i-stats"/></svg>Thống kê</button>
-  </nav>
+    <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Chuyển sang giao diện tối" aria-pressed="false" title="Đổi giao diện sáng / tối">
+      <span class="theme-icon" aria-hidden="true">&#9790;</span><span class="t">Giao diện</span><span class="theme-state t">Sáng</span>
+    </button>
+  </aside>
+  <div class="scrim" id="scrim"></div>
 
   <main class="main">
+    <header class="top">
+      <button class="icon-btn menu-btn" id="open-side" type="button" aria-label="Mở thanh bên" aria-controls="side" aria-expanded="false"><svg class="ic"><use href="#i-menu"/></svg></button>
+      <h1 class="top-title" id="top-title">Cuộc Trò Chuyện Mới</h1>
+      <div class="pill-wrap">
+        <button class="pill" id="period-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="period-menu">
+          <svg class="ic" aria-hidden="true"><use href="#i-cal"/></svg><span class="l">Kỳ báo cáo</span><strong id="period-label">Q2/2026</strong><svg class="ic" aria-hidden="true"><use href="#i-down"/></svg>
+        </button>
+        <ul class="menu" id="period-menu" role="menu" aria-label="Kỳ báo cáo" hidden></ul>
+      </div>
+    </header>
 
-    <section class="view" id="view-chat" aria-label="Trò chuyện">
+    <section class="view" id="view-chat" aria-label="Trò Chuyện">
       <div class="scroll" id="scroll">
         <div class="col">
           <div id="welcome">
@@ -95,15 +103,15 @@
       </div>
     </section>
 
-    <section class="view" id="view-lookup" aria-label="Tra cứu số liệu" hidden>
+    <section class="view" id="view-lookup" aria-label="Tra Cứu Số Liệu" hidden>
       <div class="scroll"><div class="col">
         <h2 class="page-title">Tra cứu số liệu</h2>
         <p class="muted">Tra trực tiếp một chỉ tiêu trong báo cáo hợp nhất, không qua trợ lý. Kết quả kèm nguồn trang PDF.</p>
         <form class="form-row" id="lookup-form">
           <label>Chỉ tiêu<input id="lk-metric" type="text" list="metric-list" value="doanh thu thuần" maxlength="100" autocomplete="off"></label>
           <datalist id="metric-list">
-            <option value="doanh thu thuần"><option value="giá vốn hàng bán"><option value="lợi nhuận gộp"><option value="lợi nhuận sau thuế">
-            <option value="tổng tài sản"><option value="nợ phải trả"><option value="vốn chủ sở hữu"><option value="hàng tồn kho">
+            <option value="Doanh thu thuần"><option value="Giá vốn hàng bán"><option value="Lợi nhuận gộp"><option value="Lợi nhuận sau thuế">
+            <option value="Tổng tài sản"><option value="Nợ phải trả"><option value="Vốn chủ sở hữu"><option value="Hàng tồn kho">
           </datalist>
           <label>Kỳ báo cáo<select id="lk-period"></select></label>
           <label>Cách tính<select id="lk-basis"><option value="quy" selected>Riêng quý</option><option value="luy_ke">Lũy kế từ đầu năm</option></select></label>
@@ -113,22 +121,7 @@
       </div></div>
     </section>
 
-    <section class="view" id="view-notes" aria-label="Thuyết minh và nguồn" hidden>
-      <div class="scroll"><div class="col">
-        <h2 class="page-title">Thuyết minh &amp; nguồn</h2>
-        <p class="muted">Tìm đoạn thuyết minh theo nội dung và xem đúng trang PDF dẫn chứng, không qua trợ lý. Văn bản thuyết minh là OCR nên chữ số có thể sai, hãy đối chiếu ảnh trang.</p>
-        <form class="form-row" id="notes-form">
-          <label class="grow">Nội dung cần tìm<input id="notes-q" type="search" maxlength="200" placeholder="Ví dụ: các khoản vay ngắn hạn" autocomplete="off"></label>
-          <label class="check"><input id="notes-tables" type="checkbox">Gồm cả bảng số liệu</label>
-          <button class="btn primary" type="submit">Tìm</button>
-        </form>
-        <div class="chips" id="notes-chips"></div>
-        <p class="note" id="notes-scope"></p>
-        <div id="notes-out" aria-live="polite"></div>
-      </div></div>
-    </section>
-
-    <section class="view" id="view-trends" aria-label="Xu hướng và so sánh" hidden>
+    <section class="view" id="view-trends" aria-label="Xu Hướng và So Sánh" hidden>
       <div class="scroll"><div class="col">
         <h2 class="page-title">Xu hướng &amp; so sánh</h2>
         <p class="muted">Vẽ biểu đồ nhiều kỳ, so sánh hai kỳ hoặc xem khoản mục nào làm lợi nhuận thay đổi. Số liệu lấy thẳng từ báo cáo, không qua trợ lý; chọn tối đa 3 chỉ tiêu để đặt cạnh nhau.</p>
@@ -149,11 +142,15 @@
       </div></div>
     </section>
 
-    <section class="view" id="view-stats" aria-label="Thống kê" hidden>
-      <div class="scroll"><div class="col">
-        <h2 class="page-title">Thống kê</h2>
-        <p class="muted">Độ phủ dữ liệu của chatbot: kỳ báo cáo, chỉ tiêu có số liệu, đoạn thuyết minh và trang PDF có ảnh dẫn chứng. Số đếm lấy từ chính dữ liệu đang chạy.</p>
-        <div id="stats-out" aria-live="polite"></div>
+    <section class="view" id="view-ratios" aria-label="Chỉ Số Tài Chính" hidden>
+      <div class="scroll"><div class="col wide">
+        <h2 class="page-title">Chỉ số tài chính</h2>
+        <p class="muted">Sinh lời, thanh khoản, đòn bẩy của kỳ đang chọn, kèm thay đổi so với kỳ trước và đường 6 kỳ. Số tính từ báo cáo đã đối chiếu, không qua trợ lý; bấm một chỉ số để xem công thức và nguồn.</p>
+        <form class="form-row" id="ratios-form">
+          <label>Kỳ báo cáo<select id="r-period"></select></label>
+          <label>Cách tính<select id="r-basis"><option value="quy" selected>Riêng quý</option><option value="luy_ke">Lũy kế từ đầu năm</option></select></label>
+        </form>
+        <div id="ratios-out" aria-live="polite"></div>
       </div></div>
     </section>
   </main>

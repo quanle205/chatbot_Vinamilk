@@ -1,6 +1,7 @@
 # Thư viện chạy API trên Vercel và các module src (hàm bị giới hạn 500 MB nên giữ tối thiểu). Pipeline xử lý dữ liệu dùng requirements-pipeline.txt.
 duckdb==1.5.6
-numpy>=2.0
-scikit-learn>=1.5
-google-genai>=2.0
-fastapi>=0.115
+numpy==2.3.5
+scikit-learn==1.9.1
+google-genai==2.33.0
+fastapi==0.162.0
+uvicorn==0.54.0

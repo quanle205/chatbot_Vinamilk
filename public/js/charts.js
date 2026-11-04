@@ -1,8 +1,8 @@
-// Biểu đồ đường (Chart.js nạp trễ, ghim phiên bản + SRI) và bảng số liệu từ khối `charts` của API. Dùng ở Hỏi đáp và Xu hướng & so sánh.
+// Biểu đồ đường (Chart.js 4.4.7 cục bộ, nạp trễ + SRI) và bảng số liệu từ khối `charts` của API. Dùng ở Hỏi đáp và Xu hướng & so sánh.
 import { h } from "./dom.js";
 import { docName, signed, vn } from "./format.js";
 
-const CHART_JS = { src: "https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js", integrity: "sha384-vsrfeLOOY6KuIYKDlmVH5UiBmgIdB1oEf7p01YgWHuqmOHfZr374+odEv96n9tNC" };
+const CHART_JS = { src: "/js/vendor/chart.umd.min.js", integrity: "sha384-vsrfeLOOY6KuIYKDlmVH5UiBmgIdB1oEf7p01YgWHuqmOHfZr374+odEv96n9tNC" };
 let loading = null;
 
 function loadChartJs() {
@@ -36,7 +36,7 @@ function summaryEl(b) {                           // một dòng nhận xét do 
   const m = b.summary;
   if (!m) return null;
   const describe = x => `${x.label} (${vn(x.value / b.scale)} ${b.unit})`, bare = x => x.label.replace(/^tại /, "");
-  return h("p", { class: "note", text: `Cao nhất: ${describe(m.max)}; thấp nhất: ${describe(m.min)}; từ ${bare(m.first)} đến ${bare(m.last)}: ${signed(m.change / b.scale)} ${b.unit}`
+  return h("p", { class: "note", text: `Cao nhất: ${describe(m.max)}; Thấp nhất: ${describe(m.min)}; từ ${bare(m.first)} đến ${bare(m.last)}: ${signed(m.change / b.scale)} ${b.unit}`
     + (m.growth != null ? ` (${signed(m.growth * 100)}%)` : "") + "." });
 }
 
@@ -45,7 +45,8 @@ function drawLine(box, b, before) {
   const canvas = h("canvas", { role: "img", "aria-label": `Biểu đồ đường ${b.title}: ` + b.rows.map(r => `${r.label} ${vn(r.value / b.scale)} ${b.unit}`).join("; ") });
   holder.append(canvas); box.insertBefore(holder, before);
   loadChartJs().then(Chart => {
-    const ink = cssVar("--ink"), mute = cssVar("--mute"), line = cssVar("--line");
+    const ink = cssVar("--accent"), mute = cssVar("--mute"), line = cssVar("--line");
+    Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;            // cùng phông với trang, không dùng phông mặc định của Chart.js
     new Chart(canvas, { type: "line",
       data: { labels: b.rows.map(r => r.period || r.label), datasets: [{ label: b.unit, data: b.rows.map(r => +(r.value / b.scale).toFixed(1)),
         borderColor: ink, backgroundColor: ink, pointRadius: 4, pointHoverRadius: 6, borderWidth: 2, tension: 0 }] },      // tension 0: đường thẳng, không vẽ đoạn cong sai lệch số liệu
@@ -64,3 +65,20 @@ export function chartsEl(blocks) {
     return box;
   }));
 }
+
+// Refresh existing charts when the user switches the palette.
+window.addEventListener("themechange", () => {
+  if (!window.Chart) return;
+  Object.values(window.Chart.instances).forEach(chart => {
+    chart.data.datasets.forEach(dataset => {
+      dataset.borderColor = cssVar("--accent");
+      dataset.backgroundColor = cssVar("--accent");
+    });
+    Object.values(chart.options.scales).forEach(scale => {
+      scale.ticks.color = cssVar("--mute");
+      scale.grid.color = cssVar("--line");
+      if (scale.title) scale.title.color = cssVar("--mute");
+    });
+    chart.update("none");
+  });
+});

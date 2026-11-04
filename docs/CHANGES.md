@@ -111,10 +111,41 @@ Kiểm tra tay (Chrome headless, Gemini thật, máy chủ cục bộ): câu xu 
 4. Giao diện chỉ hỗ trợ **đậm**; Markdown khác (`###`, `*nghiêng*`) từ Gemini vẫn hiện nguyên ký tự (đã có từ trước, chưa sửa).
 5. Chưa đo chất lượng câu trả lời diễn giải của Gemini; chỉ kiểm tra số liệu và cấu trúc.
 
-## 6. Gọn lại giao diện theo bản cũ (một cột)
+## 6. Thanh bên dọc làm lại, đổi tông màu
 
-- Bỏ thanh bên; quay về một cột như `public/index.old.html` nhưng giữ đủ chức năng: đầu trang gọn (tên, chỉ báo DuckDB/Gemini, kỳ báo cáo, "Gần đây", cuộc trò chuyện mới)
-  và thanh 5 thẻ luôn thấy (Hỏi đáp, Tra cứu, Thuyết minh, Xu hướng, Thống kê). Bảng màu xanh đậm của bản cũ; câu gợi ý dạng viên nhỏ; màn hình chào có 4 lối tắt tới chức năng.
-- Hộp "Gần đây" thay cho danh sách ở thanh bên; hộp này và menu kỳ không mở cùng lúc, Esc đóng cả hai. Không còn ngăn kéo/`inert`/lớp phủ nên `main.js` gọn hơn.
-- Không đổi backend, API hay dữ liệu. Chart.js vẫn chỉ tải khi có biểu đồ. Test `test_api` 25/25; Chrome thật: 5 thẻ, đổi kỳ, hỏi đáp thật, đổi tên trong hộp "Gần đây", chế độ tối,
+- Quay lại bố cục dọc (thanh bên + vùng nội dung) nhưng làm gọn: thanh bên thu gọn thành thanh biểu tượng 72 px (nút trên đầu thanh bên, lưu `vnm.rail.v1`; chỉ máy tính, điện thoại vẫn là ngăn kéo),
+  chữ nhãn bọc `<span class="t">` nên thu gọn chỉ bằng CSS, không thêm logic.
+- Giao diện mới: bảng màu chàm-tím thay màu đen/xanh đậm (mọi màu ở `:root`, có bản tối), nút chính và biểu tượng dùng chung một biến `--grad`, bo góc 14–24 px, bóng mềm,
+  tiêu đề gradient, mục đang chọn có vạch màu, ô nhập sáng viền khi focus, bong bóng câu hỏi màu chàm, đường biểu đồ lấy màu `--accent`.
+- Màn hình chào thêm 4 ô lối tắt (Tra cứu, Thuyết minh, Xu hướng, Thống kê) để các chức năng chính không chỉ nằm trong menu; câu gợi ý hiện dạng thẻ 2 cột.
+- Không đổi backend, API hay dữ liệu. Test `test_api` 25/25, `test_tools` 17/17, `test_agent` 25/25; Chrome thật: 5 màn hình, đổi kỳ, hỏi đáp thật, đổi tên, thu gọn, chế độ tối,
   390 px không tràn ngang, console sạch. Đã thay các ảnh trong `docs/screenshots/`.
+
+## 7. Bỏ mục "Thuyết minh & nguồn"
+
+- Bỏ mục này theo yêu cầu: xóa `POST /api/notes`, `src/notes.py`, `NotesBody`, `public/js/views/notes.js`, màn hình, mục menu, ô lối tắt và `NOTE_EXAMPLES`; bỏ 2 test API và 1 test công cụ (còn api 23, tools 16, agent 25).
+- Hỏi đáp vẫn tìm được nội dung thuyết minh (agent dùng `HybridRetriever`), thẻ "Nguồn" vẫn có trang PDF, ảnh trang và ghi chú. Chỉ thay đổi: không còn màn hình tìm thuyết minh riêng.
+- Các đoạn ở mục 5 và 2.x nhắc tới mục này là lịch sử, không còn đúng với mã hiện tại.
+
+## 8. Thanh bên kiểu Copilot, thêm "Chỉ số tài chính", bỏ "Thống kê"
+
+- Thanh bên đơn giản: 2 mục bắt buộc (Cuộc trò chuyện mới, Tìm kiếm) và 3 chức năng dùng nhiều nhất (Tra cứu số liệu, Xu hướng & so sánh, Chỉ số tài chính). Bỏ mục "Trò chuyện" (đã có "Cuộc trò chuyện mới"),
+  bỏ màn hình "Thống kê" (ít dùng); `/api/stats` giữ lại cho hàng số liệu ở màn hình chào. Đổi lại bảng màu trung tính (nền ấm, nút chính màu mực) thay cho tông chàm-tím.
+- **Tìm kiếm** lọc danh sách cuộc trò chuyện theo tiêu đề và nội dung, bỏ dấu để gõ "thuan" vẫn ra "thuần"; Esc đóng; khi thanh bên đang thu gọn thì bấm Tìm kiếm sẽ mở rộng ra. Thuần phía trình duyệt, không gọi máy chủ.
+- **Chỉ số tài chính**: `POST /api/ratios` (`src/ratios.py`) gọi `Analyst.ratio` cho 14 tỷ số theo 5 nhóm (Sinh lời, Chi phí, Thanh khoản, Đòn bẩy, Hoạt động) của một kỳ, kèm thay đổi so với
+  quý liền trước (lũy kế: cùng kỳ năm trước), đường nhỏ 6 kỳ, số quy năm (ROE, ROA, vòng quay), công thức và nguồn trang PDF. Mũi tên chỉ hướng, không tô xanh/đỏ vì chỉ số tăng không phải lúc nào cũng tốt (vd tỷ lệ chi phí).
+- Test: `test_api` 25/25 (thêm 2 test cho `/api/ratios`), `test_tools` 16/16, `test_agent` 25/25. Chrome thật: 5 mục thanh bên, tìm kiếm (có dấu, không dấu, không thấy), thu gọn, Chỉ số tài chính (14 thẻ, đổi kỳ/cách tính),
+  hỏi đáp thật, chế độ tối, 390 px không tràn ngang, console sạch.
+
+## 9. Giao diện hiện đại hơn, sửa phông chữ, câu trả lời đúng trọng tâm
+
+- **Phông chữ:** bỏ `Inter` (không được tải nên mỗi máy hiện một kiểu), dùng bộ phông hệ thống hỗ trợ tiếng Việt đầy đủ (`Segoe UI Variable/Segoe UI`, `system-ui`, `Roboto`...). Cỡ chữ gom về một thang 7 bậc (`--fs-xs` ... `--fs-2xl`) thay cho 15 cỡ lẻ;
+  tiêu đề bỏ `weight 800`, `letter-spacing` âm và `line-height` 1.15 (làm dấu thanh bị dính/cắt) sang `700`, `1.3`. Chart.js dùng đúng phông của trang. Mũi tên thay đổi của chỉ số dùng biểu tượng SVG thay cho ký tự ▲▼■ (hiện lệch phông tùy máy).
+  Số trong câu trả lời và bảng dùng chữ số đều bề rộng (`tabular-nums`).
+- **UI/UX:** trợ lý có avatar; tin nhắn mới xuất hiện mượt (chỉ tin cuối, không phát lại cả hội thoại); khung xám "đang tải" thay chữ trơn ở Hỏi đáp và Chỉ số tài chính; bảng có hàng sáng khi rê chuột;
+  phím tắt `Ctrl/Cmd+K` mở Tìm kiếm và `/` nhảy vào ô nhập; tôn trọng `prefers-reduced-motion`. Đã sửa lỗi chèn chữ "null" vào cuối câu trả lời do `append(null)` (phát hiện qua ảnh chụp).
+- **Câu trả lời:** prompt thêm mục "Cách trình bày": câu đầu trả lời thẳng (số chính, kỳ, đơn vị), không lời dẫn, không số VND đầy đủ nếu không được hỏi, không dòng "Nguồn:", một số liệu 1–2 câu, so sánh một câu, từ ba chỉ tiêu dùng bảng,
+  "vì sao" nêu hai khoản đóng góp lớn nhất, thuyết minh chỉ nêu điều văn bản có ghi. `src/agent/answer.py`: `tidy_answer` xóa dòng nguồn mô hình vẫn lỡ viết (chỉ phần trích "trang N", giữ nguyên lưu ý và nội dung),
+  `used_sources` chỉ giữ nguồn của công cụ có số xuất hiện trong câu trả lời (câu định tính thì giữ hết) nên thẻ Nguồn không còn kèm 10 trang không liên quan. `guard.py` tách `matches_pool` dùng chung.
+- Test: `test_agent` 28/28 (thêm 3), `test_tools` 16/16, `test_api` 25/25. Ví dụ trước/sau (Q2/2026): "Doanh thu thuần ... là 18.847,3 tỷ đồng (chi tiết: 18.847.347.464.988 VND). *Nguồn: ... trang PDF 11, chỉ tiêu mã 10.*" thành
+  "Doanh thu thuần quý 2/2026 của Vinamilk là 18.847,3 tỷ đồng."; tổng quan quý 1/2026 là một bảng 6 dòng thay cho danh sách có nguồn lặp từng dòng.

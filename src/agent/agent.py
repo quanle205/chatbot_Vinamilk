@@ -16,6 +16,7 @@ from google import genai
 from google.genai import types
 
 from .guard import find_unsupported_numbers
+from .answer import tidy_answer, used_sources
 from .prompts import SYSTEM_PROMPT
 from .toolbox import Toolbox, result_for_model
 
@@ -209,8 +210,9 @@ class VinamilkAgent:
             res.warnings.append("Yêu cầu bị từ chối bởi bộ lọc an toàn của mô hình.")
         elif res.stop_reason == "MAX_TOKENS":
             res.warnings.append("Câu trả lời bị cắt do hết giới hạn độ dài.")
-        res.answer = text.strip() or "Mình chưa tạo được câu trả lời. Bạn thử hỏi lại cụ thể hơn (nêu chỉ tiêu và kỳ báo cáo)."
+        res.answer = tidy_answer(text) or "Mình chưa tạo được câu trả lời. Bạn thử hỏi lại cụ thể hơn (nêu chỉ tiêu và kỳ báo cáo)."
         res.unsupported_numbers = find_unsupported_numbers(res.answer, tool_results)
+        res.sources = used_sources(res.answer, res.tool_calls)                 # chỉ nguồn của công cụ có số được dùng trong câu trả lời
         del contents[start:]                                                    # rút gọn lượt này thành hỏi + đáp dạng văn bản
         contents.append(types.Content(role="user", parts=[types.Part(text=question)]))
         contents.append(types.Content(role="model", parts=[types.Part(text=res.answer)]))

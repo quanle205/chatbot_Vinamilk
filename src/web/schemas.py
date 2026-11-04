@@ -40,8 +40,6 @@ class ChartBody(BaseModel):
     basis: str = Field(default="quy", pattern=BASIS)
 
 
-class NotesBody(BaseModel):
-    query: str = Field(min_length=2, max_length=200)
-    period: str | None = Field(default=None, max_length=30)           # bỏ trống = mọi kỳ
-    include_tables: bool = False                                      # False: chỉ văn bản thuyết minh; True: thêm bảng số liệu đã đối chiếu
-    k: int = Field(default=8, ge=1, le=12)
+class RatiosBody(BaseModel):
+    period: str = Field(min_length=1, max_length=30)
+    basis: str = Field(default="quy", pattern=BASIS)
