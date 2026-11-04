@@ -1,0 +1,2 @@
+# Preserve exact vendor bytes: Chart.js is verified by an SRI digest.
+public/js/vendor/*.js -text
