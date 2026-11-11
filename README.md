@@ -28,6 +28,11 @@ tăng trưởng, vẽ xu hướng. Số liệu lấy từ PDF bằng OCR, đã �
   Giao diện vẽ đường bằng Chart.js 4.4.7 (đóng gói trong `public/js/vendor`, kiểm tra SRI, nạp khi cần) kèm bảng số liệu; câu hỏi một kỳ không có biểu đồ.
 - **Giải thích biến động (`explain_change`):** phân rã chênh lệch lợi nhuận sau thuế hoặc doanh thu thuần giữa hai kỳ (so với cùng kỳ
   năm trước hoặc quý liền trước) theo các khoản mục báo cáo KQKD; tổng đóng góp bằng đúng chênh lệch. Mô hình chỉ diễn giải, không suy đoán nguyên nhân kinh doanh.
+- **Hỏi lại khi câu mơ hồ (`src/agent/clarify.py`):** chạy trước Gemini nên không tốn lượt gọi mô hình. Hỏi lại khi (1) chỉ tiêu chung chung ("lợi nhuận", "phải thu", "nợ", "tài sản", "dòng tiền", "vốn") mà không nói loại,
+  hoặc (2) có chỉ tiêu nhưng không nêu kỳ và hội thoại trước cũng chưa nêu kỳ. Trả về trường `clarify` (câu hỏi + các lựa chọn, mỗi lựa chọn là câu hỏi đầy đủ) và giao diện hiện nút bấm. Không hỏi với câu nhiều kỳ, tỷ số, "vì sao", thuyết minh,
+  dự báo hay công ty khác. Đo trên 132 câu của golden và validation: 0 câu bị hỏi nhầm. Mặc định tắt trong `VinamilkAgent` (đánh giá `e2e_eval` không đổi); API bật.
+- **Mọi trích dẫn đều có bằng chứng:** "trang PDF N" trong thẻ Nguồn là liên kết mở PDF chính thức đúng trang (Q1, Q2/2026) hoặc ảnh trang. Trang thuyết minh chưa có ảnh thì hiện trích đoạn văn bản OCR của đúng trang đó (`excerpt`).
+  Các kỳ 2025 chưa có liên kết PDF chính thức trong mã nên chỉ có ảnh trang hoặc trích đoạn; muốn có ảnh mọi trang cần chạy lại `src/ingest/render_pages.py` ở máy có `data/raw`.
 - **Phản hồi 👍/👎:** nút dưới mỗi câu trả lời gửi `POST /api/feedback` với `{question, answer, label: "up"|"down", timestamp?}`.
   Không lưu IP hay dữ liệu cá nhân. Mặc định mỗi phản hồi là một dòng `FEEDBACK {...}` trong Vercel Logs; đặt `FEEDBACK_WEBHOOK_URL`
   (và tùy chọn `FEEDBACK_WEBHOOK_TOKEN`) để gửi sang dịch vụ lưu trữ riêng; `FEEDBACK_LIMIT_PER_MINUTE` (mặc định 20) giới hạn tốc độ gửi.

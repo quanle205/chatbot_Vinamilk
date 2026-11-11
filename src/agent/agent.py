@@ -18,6 +18,7 @@ from google.genai import types
 
 from ..rag.text import find_periods
 from .guard import find_unsupported_numbers
+from .clarify import needs_clarification
 from .answer import tidy_answer, used_sources
 from .prompts import SYSTEM_PROMPT
 from .toolbox import Toolbox, result_for_model
@@ -97,6 +98,7 @@ class AgentResult:
     warnings: list = field(default_factory=list)
     unsupported_numbers: list = field(default_factory=list)
     stop_reason: str = ""
+    clarify: dict | None = None             # {question, options:[{label, query}]}: câu hỏi chưa đủ rõ, giao diện hiện các lựa chọn để bấm
     model: str = ""
     steps: int = 0
     usage: dict = field(default_factory=lambda: {"input_tokens": 0, "output_tokens": 0})
@@ -105,8 +107,9 @@ class AgentResult:
 class VinamilkAgent:
     def __init__(self, client=None, model: str | None = None, toolbox: Toolbox | None = None,
                  max_steps: int = 8, max_tokens: int = 8192, retry_delays: tuple = (1.5, 3.0),
-                 fallback_models: tuple | None = None, deadline_s: float | None = None, intent_filter: bool = False):
+                 fallback_models: tuple | None = None, deadline_s: float | None = None, intent_filter: bool = False, clarify: bool = False):
         self._client = client
+        self.clarify = clarify              # True: hỏi lại khi câu mơ hồ (chỉ tiêu chung chung, thiếu kỳ) thay vì để mô hình đoán
         self.intent_filter = intent_filter  # True: từ chối sớm câu ngoài phạm vi bằng bộ phân loại đã huấn luyện (src/train), không tốn lượt Gemini
         self.deadline_s = deadline_s        # tổng thời gian tối đa cho một câu hỏi (hàm serverless bị ngắt sau 60 giây)
         self._deadline = None
@@ -176,6 +179,10 @@ class VinamilkAgent:
             contents.append(types.Content(role="user", parts=[types.Part(text=question)]))
             contents.append(types.Content(role="model", parts=[types.Part(text=REFUSAL_TEXT)]))
             return AgentResult(answer=REFUSAL_TEXT, stop_reason="OUT_OF_SCOPE", model="intent-classifier")
+        if self.clarify and (c := needs_clarification(question, contents)):
+            contents.append(types.Content(role="user", parts=[types.Part(text=question)]))
+            contents.append(types.Content(role="model", parts=[types.Part(text=c.question)]))
+            return AgentResult(answer=c.question, clarify=c.as_dict(), stop_reason="CLARIFY", model="clarifier")
         start = len(contents)
         contents.append(types.Content(role="user", parts=[types.Part(text=question)]))
         res = AgentResult(answer="")

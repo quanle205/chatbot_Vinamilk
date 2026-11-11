@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import json
+from functools import lru_cache
 
-from ..paths import PAGES_DIR
+from ..paths import CHUNKS_PATH, PAGES_DIR
+
+EXCERPT_CHARS = 1500
 
 OFFICIAL_REPORTS_URL = "https://www.vinamilk.com.vn/investor/reports/financial"
 OFFICIAL_PDF_URLS = {
@@ -38,6 +41,33 @@ def row_boxes(doc: str, page) -> dict:
         return {}
 
 
+@lru_cache(maxsize=1)
+def _page_texts() -> dict:
+    """{(doc, trang): [đoạn văn bản]} từ chunks.jsonl: bằng chứng bằng chữ cho trang chưa có ảnh PDF."""
+    out: dict = {}
+    try:
+        with open(CHUNKS_PATH, encoding="utf-8") as f:
+            for line in f:
+                c = json.loads(line)
+                if c.get("page") is not None:
+                    out.setdefault((c["doc"], int(c["page"])), []).append(c.get("text", ""))
+    except OSError:
+        pass
+    return out
+
+
+def page_excerpt(doc: str, page) -> str | None:
+    """Trích đoạn văn bản (OCR) của trang PDF được dẫn, dùng làm bằng chứng khi không có ảnh trang."""
+    try:
+        parts = _page_texts().get((doc, int(page)))
+    except (TypeError, ValueError):
+        return None
+    if not parts:
+        return None
+    text = "\n\n".join(p.strip() for p in parts if p.strip())
+    return text[:EXCERPT_CHARS].rstrip() + (" …" if len(text) > EXCERPT_CHARS else "")
+
+
 def source_links(sources: list) -> list[dict]:
     """Gộp các dòng số liệu cùng trang thành một nguồn: tên báo cáo, trang, liên kết PDF chính thức, ảnh trang và các dòng được trích."""
     merged: dict[tuple, dict] = {}
@@ -46,6 +76,8 @@ def source_links(sources: list) -> list[dict]:
         item = merged.setdefault(key, {"doc": key[0], "statement": key[1], "page": key[2], "rows": [],
                                        "url": pdf_url(key[0], key[2]), "is_pdf": key[0] in OFFICIAL_PDF_URLS,
                                        "image": page_image(key[0], key[2]), "boxes": []})
+        if not item["image"] and "excerpt" not in item:
+            item["excerpt"] = page_excerpt(key[0], key[2])            # mọi trang dẫn đều có bằng chứng: ảnh trang hoặc trích đoạn chữ
         code, label = s.get("code"), s.get("label")
         if code and code != "-":
             row = f"mã {code}: {label}" if label else f"mã {code}"

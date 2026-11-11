@@ -78,6 +78,12 @@ function botEl(msg, isLast) {
     return wrap;
   }
   const unsupported = msg.unsupported || [];
+  const clarify = isLast && msg.clarify && (msg.clarify.options || []).length ? h("div", { class: "chips", role: "group", "aria-label": "Chọn để trả lời" },
+    msg.clarify.options.map(o => h("button", { class: "chip", type: "button", onclick: () => ask(o.query) }, o.label))) : null;
+  if (msg.clarify) {                                                          // câu hỏi làm rõ: chỉ có lựa chọn để bấm, không nguồn/phản hồi
+    body.append(markdown(msg.text), ...(clarify ? [clarify] : []));
+    return wrap;
+  }
   const parts = [markdown(msg.text),
     unsupported.length ? h("div", { class: "warn", role: "note" }, "Các số sau trong câu trả lời ", h("strong", { text: "không khớp" }), ` kết quả tra cứu, hãy kiểm tra lại: ${unsupported.join(", ")}`) : null,
     (msg.warnings || []).map(w => h("div", { class: "warn", role: "note", text: w })),
@@ -147,7 +153,7 @@ async function ask(question, regenerate = false) {
     if (!r.ok) throw Object.assign(new Error(chatError(r.status, r.data)), { http: r.status });
     delete bot.pending;
     Object.assign(bot, { text: r.data.answer, sources: r.data.sources || [], notes: r.data.notes || [], charts: r.data.charts || [],
-      warnings: r.data.warnings || [], unsupported: r.data.unsupported_numbers || [] });
+      warnings: r.data.warnings || [], clarify: r.data.clarify || null, unsupported: r.data.unsupported_numbers || [] });
   } catch (e) {
     delete bot.pending;
     bot.error = e.name === "AbortError" ? "Đã dừng trả lời." : e.http ? e.message : NETWORK_ERROR;

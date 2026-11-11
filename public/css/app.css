@@ -185,6 +185,7 @@
   .src-links { display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:4px; }
   .srcs a, .tbl a, .pgd summary { color:var(--focus); }
   .pgd summary { cursor:pointer; margin-top:4px; }
+  .excerpt { white-space:pre-wrap; max-height:220px; overflow:auto; margin:6px 0 4px; padding:8px 10px; background:var(--soft); border:1px solid var(--line); border-radius:8px; font:var(--fs-sm)/1.5 inherit; }
   .pg { position:relative; display:block; margin-top:8px; }
   .pg img { display:block; width:100%; height:auto; border:1px solid var(--line); border-radius:10px; background:#fff; }
   .pg .hl { position:absolute; border:2px solid var(--hl); background:rgba(225,29,72,.14); border-radius:3px; pointer-events:none; }

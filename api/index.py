@@ -57,7 +57,7 @@ def get_toolbox() -> Toolbox:
 def get_agent() -> VinamilkAgent:
     global _agent
     if _agent is None:
-        _agent = VinamilkAgent(toolbox=get_toolbox(), deadline_s=float(os.environ.get("ASK_DEADLINE_S", "45")), intent_filter=True)
+        _agent = VinamilkAgent(toolbox=get_toolbox(), deadline_s=float(os.environ.get("ASK_DEADLINE_S", "45")), intent_filter=True, clarify=True)
     return _agent
 
 
@@ -91,7 +91,7 @@ def ask(body: AskBody, request: Request):
             raise HTTPException(429, "Trợ lý đang tạm hết lượt sử dụng. Bạn thử lại sau hoặc dùng mục Tra cứu số liệu.")
         raise HTTPException(502, "Trợ lý đang bận hoặc gặp sự cố tạm thời. Bạn thử lại sau ít phút nhé.")
     return {"answer": r.answer, "sources": source_links(r.sources), "notes": collect_notes(r.tool_calls), "warnings": r.warnings,
-            "unsupported_numbers": r.unsupported_numbers, "charts": build_charts(r.tool_calls)}
+            "unsupported_numbers": r.unsupported_numbers, "charts": build_charts(r.tool_calls), "clarify": r.clarify}
 
 
 @app.post("/api/lookup")
