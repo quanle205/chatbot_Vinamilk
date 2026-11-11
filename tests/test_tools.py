@@ -212,6 +212,31 @@ def test_coverage_counts_match_the_data():
     assert next(m for m in c["metrics"] if m["key"] == "tong_tai_san")["have"] == [True] * 6      # mã 270 (TT200) và 280 (TT99) đều được ánh xạ
 
 
+def test_expand_query_adds_canonical_metric_name_only_on_exact_alias():
+    from src.rag.retriever import expand_query
+    out = expand_query("Lượng tiền công ty đang nắm giữ cuối quý 3/2025")
+    assert out.startswith("Lượng tiền công ty đang nắm giữ") and "Tiền và các khoản tương đương tiền" in out
+    assert expand_query("Ai là chủ tịch của công ty?") == "Ai là chủ tịch của công ty?"      # không nhắc chỉ tiêu: giữ nguyên
+
+
+def test_loan_and_dividend_aliases_resolve_exactly_and_fuzzy_matches_are_flagged():
+    from src.tools.registry import call_tool
+    for name, key in (("vay và nợ thuê tài chính ngắn hạn", "vay_ngan_han"), ("vay_va_no_thue_tai_chinh_ngan_han", "vay_ngan_han"),
+                      ("cổ tức đã chi trả", "chi_tra_co_tuc")):
+        r = call_tool("get_metric", {"metric": name, "period": "Q3/2025", "basis": "luy_ke"})
+        assert r["ok"] and r["metric"] == key and not any("gần đúng" in n for n in r["notes"]), (name, r.get("metric"))
+    r = call_tool("get_metric", {"metric": "vay nợ ngắn hạn xyz", "period": "Q3/2025"})        # khớp mờ: phải có cảnh báo, không âm thầm
+    assert r["ok"] and any("gần đúng" in n for n in r["notes"]) and "gần đúng" in r["text"]
+
+
+def test_customer_receivable_phrasings_do_not_fall_back_to_total_short_term_receivables():
+    from src.tools.registry import call_tool
+    total = call_tool("get_metric", {"metric": "phai_thu_ngan_han", "period": "Q4/2025"})["value"]
+    for name in ("Các khoản phải thu của khách hàng", "phải thu ngắn hạn của khách hàng", "phải thu của khách hàng"):
+        r = call_tool("get_metric", {"metric": name, "period": "Q4/2025"})
+        assert r["ok"] and r["metric"] == "phai_thu_khach_hang" and r["value"] != total and not any("gần đúng" in n for n in r["notes"]), name
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted(globals().items()):

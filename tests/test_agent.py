@@ -346,6 +346,28 @@ def test_prompt_asks_for_direct_answers_without_source_lines():
     assert "Không viết dòng \"Nguồn:\"" in SYSTEM_PROMPT and "Câu đầu tiên trả lời thẳng" in SYSTEM_PROMPT
 
 
+def test_false_no_data_claim_triggers_one_nudge_then_uses_tools():
+    a = agent([resp([text("Không có dữ liệu cho quý 3/2025.")]),
+               resp([call("get_metric", metric="doanh thu thuần", period="Q3/2025")]),
+               resp([text("Doanh thu thuần quý 3/2025 là 17.033,6 tỷ đồng.")])])
+    r = a.ask("Doanh thu thuần quý 3/2025?")
+    assert [c.name for c in r.tool_calls] == ["get_metric"] and "17.033,6" in r.answer
+    sent = [p.text for c in a.client.calls[1]["contents"] for p in c.parts if getattr(p, "text", None)]
+    assert any("6 kỳ có dữ liệu" in t for t in sent)
+
+
+def test_genuine_no_data_for_unsupported_period_is_not_nudged():
+    a = agent([resp([text("Không có dữ liệu cho quý 3/2026; chỉ có Q1/2025 đến Q2/2026.")])])
+    r = a.ask("Doanh thu thuần quý 3/2026?")
+    assert not r.tool_calls and len(a.client.calls) == 1 and "không có dữ liệu" in r.answer.lower()
+
+
+def test_nudge_happens_only_once():
+    a = agent([resp([text("Không có dữ liệu cho quý 3/2025.")]), resp([text("Vẫn không có dữ liệu cho quý 3/2025.")])])
+    r = a.ask("Doanh thu thuần quý 3/2025?")
+    assert len(a.client.calls) == 2 and not r.tool_calls
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted(globals().items()):

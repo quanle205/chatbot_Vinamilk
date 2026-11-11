@@ -51,7 +51,7 @@ METRICS = [
     _m("tien", "Tiền và các khoản tương đương tiền", "CDKT", "110", "balance", ["tiền mặt", "tiền và tương đương tiền", "tiền và các khoản tương đương tiền", "lượng tiền"]),
     _m("dau_tu_ngan_han", "Các khoản đầu tư tài chính ngắn hạn", "CDKT", "120", "balance", ["đầu tư tài chính ngắn hạn", "đầu tư ngắn hạn"]),
     _m("phai_thu_ngan_han", "Các khoản phải thu ngắn hạn", "CDKT", "130", "balance", ["phải thu ngắn hạn", "khoản phải thu"]),
-    _m("phai_thu_khach_hang", "Phải thu khách hàng", "CDKT", "131", "balance", ["phải thu khách hàng"]),
+    _m("phai_thu_khach_hang", "Phải thu khách hàng", "CDKT", "131", "balance", ["phải thu khách hàng", "phải thu của khách hàng", "các khoản phải thu của khách hàng", "phải thu ngắn hạn của khách hàng", "công nợ khách hàng"]),
     _m("hang_ton_kho", "Hàng tồn kho", "CDKT", "140", "balance", ["hàng tồn kho", "tồn kho"]),
     _m("tai_san_ngan_han", "Tài sản ngắn hạn", "CDKT", "100", "balance", ["tài sản ngắn hạn"]),
     _m("tai_san_dai_han", "Tài sản dài hạn", "CDKT", "200", "balance", ["tài sản dài hạn"]),
@@ -61,8 +61,8 @@ METRICS = [
     _m("no_ngan_han", "Nợ ngắn hạn", "CDKT", "310", "balance", ["nợ ngắn hạn"]),
     _m("no_dai_han", "Nợ dài hạn", "CDKT", "330", "balance", ["nợ dài hạn"]),
     _m("phai_tra_nguoi_ban", "Phải trả người bán", "CDKT", "311", "balance", ["phải trả người bán", "phải trả nhà cung cấp"]),
-    _m("vay_ngan_han", "Vay ngắn hạn", "CDKT", "320", "balance", ["vay ngắn hạn", "nợ vay ngắn hạn", "vay ngân hàng ngắn hạn"], code99="321"),
-    _m("vay_dai_han", "Vay dài hạn", "CDKT", "338", "balance", ["vay dài hạn", "nợ vay dài hạn"], code99="339"),
+    _m("vay_ngan_han", "Vay ngắn hạn", "CDKT", "320", "balance", ["vay ngắn hạn", "nợ vay ngắn hạn", "vay ngân hàng ngắn hạn", "vay và nợ thuê tài chính ngắn hạn", "nợ thuê tài chính ngắn hạn"], code99="321"),
+    _m("vay_dai_han", "Vay dài hạn", "CDKT", "338", "balance", ["vay dài hạn", "nợ vay dài hạn", "vay và nợ thuê tài chính dài hạn", "nợ thuê tài chính dài hạn"], code99="339"),
     _m("von_chu_so_huu", "Vốn chủ sở hữu", "CDKT", "400", "balance", ["vốn chủ sở hữu", "vốn chủ", "equity"]),
     _m("von_co_phan", "Vốn cổ phần", "CDKT", "411", "balance", ["vốn cổ phần", "vốn điều lệ"]),
     _m("lnst_chua_phan_phoi", "Lợi nhuận sau thuế chưa phân phối", "CDKT", "421", "balance", ["lợi nhuận chưa phân phối", "lnst chưa phân phối"], code99="420"),
@@ -75,7 +75,7 @@ METRICS = [
     _m("luu_chuyen_dau_tu", "Lưu chuyển tiền thuần từ hoạt động đầu tư", "LCTT", "30", "flow", ["dòng tiền đầu tư", "lưu chuyển tiền từ hoạt động đầu tư"]),
     _m("thu_di_vay", "Tiền thu từ đi vay", "LCTT", "33", "flow", ["tiền thu từ đi vay", "thu từ vay"]),
     _m("tra_no_goc_vay", "Tiền chi trả nợ gốc vay", "LCTT", "34", "flow", ["trả nợ gốc vay", "trả nợ vay"]),
-    _m("chi_tra_co_tuc", "Tiền chi trả cổ tức", "LCTT", "36", "flow", ["chi trả cổ tức", "trả cổ tức", "cổ tức đã trả"]),
+    _m("chi_tra_co_tuc", "Tiền chi trả cổ tức", "LCTT", "36", "flow", ["chi trả cổ tức", "trả cổ tức", "cổ tức đã trả", "cổ tức đã chi trả", "tiền trả cổ tức", "chi cổ tức"]),
     _m("luu_chuyen_tai_chinh", "Lưu chuyển tiền thuần từ hoạt động tài chính", "LCTT", "40", "flow", ["dòng tiền tài chính", "lưu chuyển tiền từ hoạt động tài chính"]),
     _m("luu_chuyen_tien_thuan", "Lưu chuyển tiền thuần trong kỳ", "LCTT", "50", "flow", ["lưu chuyển tiền thuần trong kỳ", "biến động tiền thuần"]),
 ]
@@ -91,6 +91,14 @@ def get_metric(key_or_name: str) -> Metric:
     if not hits:
         raise KeyError(f"Không có chỉ tiêu '{key_or_name}'. Dùng search_metrics để tìm tên chỉ tiêu.")
     return hits[0]
+
+
+def is_exact_match(text: str, m: Metric) -> bool:
+    """`text` là mã, tên chuẩn hoặc một biệt danh của `m` (không phải khớp mờ)?"""
+    if text == m.key:
+        return True
+    q = accent_free(normalize(text)).replace("_", " ")
+    return any(q == a for mm, names in _NORM_ALIASES if mm is m for a in names)
 
 
 def find_metrics(text: str, limit: int = 5) -> list[Metric]:

@@ -6,6 +6,9 @@ import argparse
 import sys
 from pathlib import Path
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.rag.retriever import HybridRetriever  # noqa: E402
 
@@ -56,13 +59,13 @@ def main():
 
 
 def run_group(r, CASES, a):
-    runs =[("bm25", "bm25", None), ("vector", "vector", None), ("hybrid", "hybrid", None)]
+    runs = [("bm25 (gốc)", "bm25", None), ("bm25+mở rộng", "bm25", None), ("vector", "vector", None), ("hybrid", "hybrid", None)]
     runs += [(f"hybrid w_vec={wv}", "hybrid", {"vector": wv}) for wv in (0.5, 0.3, 0.15)]
     for label, mode, weights in runs:
         hit = rr = 0.0
         misses = []
         for q, doc, needle in CASES:
-            hits = r.search(q, k=a.k, mode=mode, weights=weights)
+            hits = r.search(q, k=a.k, mode=mode, weights=weights, expand=label != "bm25 (gốc)")
             rank = next((i for i, h in enumerate(hits, 1) if h.chunk["doc"] == doc and needle in h.chunk["text"]), None)
             if rank:
                 hit += 1
@@ -74,7 +77,7 @@ def run_group(r, CASES, a):
                 for h in hits[:3]:
                     print(f"   {h.score:.4f} {h.ranks} {h.chunk['id']} | {h.chunk['text'].splitlines()[0][:80]}")
         n = len(CASES)
-        print(f"{label:16s} Hit@{a.k} = {hit / n:.2f}  MRR = {rr / n:.2f}" + (f"   trượt: {misses}" if misses else ""))
+        print(f"{label:18s} Hit@{a.k} = {hit / n:.2f}  MRR = {rr / n:.2f}" + (f"   trượt: {misses}" if misses else ""))
 
 
 if __name__ == "__main__":

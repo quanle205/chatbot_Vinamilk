@@ -10,7 +10,7 @@ tăng trưởng, vẽ xu hướng. Số liệu lấy từ PDF bằng OCR, đã �
 | data/interim | kết quả OCR và parse trung gian (không đưa lên git) |
 | data/processed | `financials.duckdb`, `chunks.jsonl`, `overrides.csv` (số đã đối chiếu tay với PDF) |
 | src/ingest | pipeline dữ liệu: `preprocess.py` (PDF -> OCR), `parse_statements.py`, `repair_identities.py`, `build_db.py` |
-| src/rag | `chunking.py`, BM25 + vector n-gam + RRF (`retriever.py`) |
+| src/rag | `chunking.py`, truy xuất BM25 + mở rộng truy vấn theo biệt danh chỉ tiêu (`retriever.py`); nhánh vector n-gam chỉ giữ để đối chứng (đo: kém BM25, trọng số 0) |
 | src/tools | tra số, tỷ số, tăng trưởng, chuỗi kỳ, phân rã biến động (`explain.py`), máy tính (`TOOL_SPECS`, `call_tool`) |
 | src/ratios.py, src/stats.py | bảng chỉ số tài chính (mục Chỉ số tài chính) và số đếm độ phủ dữ liệu (hàng số liệu ở màn hình chào), đều không qua mô hình |
 | src/web | lớp web dùng chung: giới hạn tốc độ, liên kết nguồn (PDF chính thức, ảnh trang), kiểu dữ liệu vào |
@@ -18,7 +18,7 @@ tăng trưởng, vẽ xu hướng. Số liệu lấy từ PDF bằng OCR, đã �
 | src/feedback.py | lưu phản hồi 👍/👎 qua giao diện `FeedbackStore` (mặc định ghi log, tùy chọn webhook) |
 | src/train | huấn luyện: bộ phân loại ý định câu hỏi (`train_intent.py`) và tìm lưới tham số truy xuất (`tune_retrieval.py`) |
 | api, public | API FastAPI (`api/index.py`, chỉ còn định tuyến) và giao diện tĩnh: `public/index.html` (khung), `public/css/app.css`, `public/js/` (module ES), ảnh trang PDF dẫn chứng (`public/pages`) |
-| tests, eval | kiểm thử và đo chất lượng truy xuất |
+| tests, eval | kiểm thử; `eval/retrieval_check.py` (truy xuất), `eval/e2e_eval.py` + `eval/golden.jsonl` (đánh giá đầu-cuối với Gemini thật) |
 
 ## Tính năng
 
@@ -110,12 +110,52 @@ python tests/test_api.py           # cần pip install httpx
 python eval/retrieval_check.py
 ```
 
-Các test không gọi mạng (Gemini được thay bằng client giả); chất lượng câu trả lời thật chưa được đo.
+Các test không gọi mạng (Gemini được thay bằng client giả). `python tests/test_e2e_scoring.py` kiểm tra bộ chấm điểm đầu-cuối và bộ câu vàng.
+
+### Kiểm định dữ liệu (không cần mạng)
+
+```
+python eval/data_audit.py --sensitivity 150 --sample 40
+python tests/test_data_audit.py
+```
+
+Áp đẳng thức kế toán (tổng tài sản = nợ + vốn, doanh thu thuần − giá vốn = lợi nhuận gộp, ...), kiểm tra chéo giữa báo cáo (số 1/1/2025 như nhau ở mọi báo cáo 2025, quý 1 + quý 2 = lũy kế 6 tháng)
+và toàn bộ ràng buộc dòng tổng/dòng con của pipeline lên DB cuối cùng. Kết quả: **638/638 đạt, 1.696/1.716 ô (99%) được ít nhất một ràng buộc phủ**, và mọi lỗi một chữ số chèn giả đều bị bắt.
+Hiểu đúng giới hạn: đây là kiểm tra **nhất quán nội bộ**, không phải đối chiếu với PDF. Pipeline sửa OCR đã dùng chính các ràng buộc này nên 71 ô đã sửa/suy ra (REPAIRED/DERIVED) đạt theo cách dựng;
+bằng chứng mạnh là 1.542 ô OCR thuần đều thỏa mọi ràng buộc, vì một chữ số sai gần như chắc chắn làm vỡ đẳng thức. Lỗi không bị bắt: sai ở ô nằm ngoài ràng buộc (19 ô,
+xuất ra `eval/reports/ocr_sample.csv` để đối chiếu tay), hoặc hai lỗi bù trừ nhau. Đã đối chiếu tay với PDF 18 trong 19 ô chưa được phủ (ô còn lại trùng giá trị với một ô đã kiểm): **0 ô sai**. Với 18 ô, 0 sai chỉ cho biết tỷ lệ sai tối đa khoảng 15% (CI95), nên đây là xác nhận nhỏ,
+không phải ước lượng tỷ lệ sai OCR chung; ước lượng đó vẫn cần người đối chiếu một mẫu ngẫu nhiên các ô OCR đã được phủ (xuất bằng `--sample` sau khi bỏ lọc ô chưa phủ).
+
+### Đánh giá đầu-cuối với Gemini thật
+
+```
+python eval/build_golden.py                  # dựng lại eval/golden.jsonl (86 câu; đáp án lấy từ DuckDB đã đối chiếu tay)
+python eval/e2e_eval.py --limit 10           # thử nhanh
+python eval/e2e_eval.py --sleep 4            # toàn bộ; khóa miễn phí có hạn mức nên nghỉ giữa các câu
+```
+
+Độ đo: chọn đúng công cụ và tham số, đúng số liệu, đúng nguồn, truy xuất đúng đoạn thuyết minh, từ chối đúng câu ngoài phạm vi,
+không bịa số khi thiếu dữ liệu, tỷ lệ hallucination (số bị `guard.py` gắn cờ), từ chối nhầm câu hợp lệ, độ trễ p50/p95, token;
+kèm khoảng tin cậy Wilson 95%. Câu lỗi mạng/hạn mức (429) bị loại khỏi tỷ lệ và đếm riêng. Báo cáo JSON (có câu trả lời từng câu) ở `eval/reports/` (không đưa lên git).
+Tập kiểm chứng độc lập `eval/validation.jsonl` (46 câu, dựng bằng `eval/build_validation.py`, chạy `--golden eval/validation.jsonl`) viết sau golden với chỉ tiêu/kỳ/cách nói khác; quy tắc: không sửa mã dựa trên nó rồi chấm lại chính nó.
+Kết quả kiểm chứng độc lập (46 câu, chạy một lần, không chỉnh mã theo kết quả): **45/46 = 98%** (CI95 89–100%), hallucination 0/46, từ chối nhầm 0/33, từ chối đúng 10/10;
+cũng do mô hình dự phòng `gemini-3.5-flash-lite` trả lời. Câu sai duy nhất: "phải thu của khách hàng" bị khớp mờ sang tổng phải thu ngắn hạn. Đã bổ sung biệt danh, quy tắc prompt và test, chưa chấm lại.
+Chạy lại với `--model gemini-3.6-flash` (không có `--no-fallback`) vẫn do `gemini-3.5-flash-lite` trả lời 38/38 câu, vì mô hình chỉ định lỗi rồi bị thay âm thầm: kết quả 43/45 không phải số của `3.6`.
+Dùng `--no-fallback` khi muốn đo đúng một mô hình. Hai câu sai (khấu hao, cổ tức) cùng kiểu: mô hình nhỏ dùng `search_documents` thay `get_metric` và nêu số từ một bảng thuyết minh khác định nghĩa.
+Chú ý: "hallucination = 0" chỉ nghĩa là mọi số đều lấy từ công cụ; nó không bắt được trường hợp công cụ trả số của chỉ tiêu khác.
+Lưu ý: golden set đo hành vi của agent so với dữ liệu đã đối chiếu, không đo độ đúng của OCR.
+
+**Kết quả đo gần nhất (86 câu, Gemini thật, 2026-11-08):**
+lượt đầu 80/86 đạt (93%, CI95 86–97%) sau khi loại 20 lỗi hạn mức 429 và chạy lại; sau khi sửa các lỗi tìm thấy rồi chạy lại 6 câu sai: 85/86.
+Hallucination 0/86, từ chối nhầm 0/68, từ chối đúng 14/14. Cần đọc kèm:
+- **Gần như toàn bộ câu do mô hình dự phòng `gemini-3.5-flash-lite` trả lời** (68/74; mô hình chính chỉ 2 câu) vì hạn mức khóa miễn phí. Số trên phản ánh mô hình yếu nhất; chạy lại với khóa có hạn mức đủ cho mô hình chính.
+- Các sửa (biệt danh chỉ tiêu, cảnh báo khớp mờ, nhắc lại khi mô hình nói sai "không có dữ liệu", quy tắc "so với đầu năm", nới tiêu chí xu hướng) được rút ra từ chính 86 câu này nên 85/86 là số đã tinh chỉnh trên tập dev, không phải số kiểm chứng độc lập. Cần thêm câu mới chưa dùng để sửa.
+- Mô hình không xác định (cùng câu có lúc đúng, lúc sai) nên mỗi lần chạy có thể lệch vài câu. Chất lượng nhận xét xu hướng bằng lời (ví dụ "tăng ổn định" dù Q4/2025 giảm) chưa chấm tự động.
 
 ## Huấn luyện và đo
 
 ```
-python -m src.train.train_intent       # phân loại ý định: train 1.044 / test 390 câu, độ chính xác ~0,80, quét ngưỡng từ chối
+python -m src.train.train_intent       # phân loại ý định: train 1.656 / test 390 câu + 244 câu giữ lại sạch; quét ngưỡng từ chối
 python -m src.train.tune_retrieval     # tìm lưới k1, b, trọng số vector trên 210 câu train / 90 câu test (~4 phút)
 ```
 

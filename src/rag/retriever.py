@@ -1,4 +1,9 @@
-"""Truy xuất lai: BM25 + vector, hợp nhất bằng Reciprocal Rank Fusion (RRF).
+"""Truy xuất văn bản: BM25 là nhánh chạy thật; nhánh vector (TF-IDF n-gam ký tự) chỉ giữ làm đối chứng thực nghiệm.
+
+Đo trên eval/retrieval_check.py: vector đứng riêng Hit@6 chỉ ~0,3 và kéo hybrid xuống dưới BM25, nên trọng số mặc định là 0
+(nhánh vector không được dựng khi không dùng). Cách nói đời thường ("lượng tiền công ty đang nắm giữ") được xử lý bằng
+`expand_query`: nối tên chuẩn của chỉ tiêu có biệt danh xuất hiện trong câu hỏi, không cần mô hình embedding.
+Khi bật vector, hợp nhất bằng Reciprocal Rank Fusion (RRF).
 
 RRF(d) = Σ_r 1 / (k + rank_r(d)), k = 60: chỉ dùng thứ hạng nên không cần chuẩn hóa điểm BM25 và cosine.
 Kỳ báo cáo trong câu hỏi (Q1/2026, 6 tháng đầu năm 2025...) được dùng làm bộ lọc cứng theo `doc`,
@@ -14,12 +19,29 @@ import numpy as np
 
 from .bm25 import BM25
 from .embed import NgramEmbedder, similarity
-from .text import accent_free, find_periods
+from .text import accent_free, find_periods, normalize
 
 RRF_K = 60
 CANDIDATES = 50
 NUMERIC_HINTS = ("bao nhieu", "bang bao", "la bao", "tong", "doanh thu", "loi nhuan", "gia von", "chi phi",
                  "tai san", "no phai tra", "von chu so huu", "tien ", "bien", "so sanh", "tang", "giam")
+
+
+_ALIASES = None
+
+
+def expand_query(query: str) -> str:
+    """Nối tên chuẩn của chỉ tiêu mà một biệt danh (trong src/tools/metrics.py) xuất hiện trọn trong câu hỏi.
+
+    Chỉ khớp trọn biệt danh (không mờ) để không thêm nhiễu; câu không nhắc chỉ tiêu nào được giữ nguyên.
+    """
+    global _ALIASES
+    if _ALIASES is None:
+        from ..tools.metrics import METRICS                     # nạp muộn: tránh phụ thuộc vòng khi import
+        _ALIASES = [(m.name, [f" {accent_free(normalize(a))} " for a in m.aliases if len(a) >= 4]) for m in METRICS]
+    q = f" {accent_free(normalize(query))} "
+    extra = [name for name, aliases in _ALIASES if any(a in q for a in aliases) and accent_free(normalize(name)) not in q]
+    return query + " " + " ".join(extra) if extra else query
 
 
 @dataclass
@@ -79,7 +101,9 @@ class HybridRetriever:
         return [int(i) for i in idx if np.isfinite(s[i])]
 
     def search(self, query: str, k: int = 6, docs: set[str] | None = None, mode: str = "hybrid",
-               weights: dict | None = None) -> list[Hit]:
+               weights: dict | None = None, expand: bool = True) -> list[Hit]:
+        if expand:
+            query = expand_query(query)
         w = {"bm25": 1.0, "vector": self.vector_weight, **(weights or {})}
         if mode == "vector" and w["vector"] <= 0:
             w["vector"] = 1.0                                            # chỉ nhánh vector: trọng số mặc định 0 không được làm mất thứ hạng

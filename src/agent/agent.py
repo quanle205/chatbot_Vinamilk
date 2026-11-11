@@ -9,12 +9,14 @@ Client có thể tiêm vào (`VinamilkAgent(client=...)`) để kiểm thử mà
 from __future__ import annotations
 
 import os
+import re
 import time
 from dataclasses import dataclass, field
 
 from google import genai
 from google.genai import types
 
+from ..rag.text import find_periods
 from .guard import find_unsupported_numbers
 from .answer import tidy_answer, used_sources
 from .prompts import SYSTEM_PROMPT
@@ -29,6 +31,20 @@ FALLTHROUGH_CODES = TRANSIENT_CODES | {429, 403, 404}       # đổi sang mô h�
 DEFAULT_FALLBACKS = "gemini-3.6-flash,gemini-3.5-flash-lite"
 BLOCKED = {"SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "RECITATION", "IMAGE_SAFETY"}
 SCHEMA_KEYS = {"type", "required", "enum", "description", "minimum", "maximum"}
+
+
+SUPPORTED_DOCS = {"q1-2025", "q2-2025", "q3-2025", "q4-2025", "q1-2026", "q2-2026"}
+NO_DATA_CLAIM = re.compile(r"không có (?:dữ liệu|số liệu)|chưa có (?:dữ liệu|số liệu)|không nằm trong|ngoài phạm vi", re.I)
+NUDGE_TEXT = ("Kỳ báo cáo trong câu hỏi nằm trong 6 kỳ có dữ liệu (Q1/2025 đến Q2/2026). Hãy gọi công cụ phù hợp "
+              "(get_metric, get_growth, search_documents...) để tra rồi trả lời; chỉ nói không có dữ liệu nếu công cụ báo như vậy.")
+
+
+def claims_false_no_data(question: str, answer: str) -> bool:
+    """Câu trả lời tuyên bố "không có dữ liệu" cho một kỳ mà dữ liệu thực sự có?
+
+    Mô hình nhỏ (bản dự phòng) đôi khi từ chối kỳ hợp lệ mà không gọi công cụ nào; đo ở eval/e2e_eval.py.
+    """
+    return bool(find_periods(question)[0] & SUPPORTED_DOCS) and bool(NO_DATA_CLAIM.search(answer))
 
 
 class AgentConfigError(RuntimeError):
@@ -165,6 +181,7 @@ class VinamilkAgent:
         res = AgentResult(answer="")
         tool_results: list = []
         pinned = None
+        nudged = False
         try:
             for step in range(1, self.max_steps + 1):
                 pinned, resp = self._generate(contents, pinned)
@@ -183,6 +200,11 @@ class VinamilkAgent:
 
                 calls = [p.function_call for p in cand.content.parts if p.function_call]
                 if not calls:
+                    said = "".join(p.text for p in cand.content.parts if p.text and not p.thought)
+                    if not res.tool_calls and not nudged and claims_false_no_data(question, said):
+                        nudged = True                                # một lần nhắc: kỳ này có dữ liệu, hãy tra bằng công cụ
+                        contents.append(types.Content(role="user", parts=[types.Part(text=NUDGE_TEXT)]))
+                        continue
                     break
                 parts = []
                 for fc in calls:

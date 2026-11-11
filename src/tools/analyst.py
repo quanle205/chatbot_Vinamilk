@@ -11,7 +11,7 @@ from typing import Callable
 
 from ..rag.text import fmt_ty, fmt_vnd
 from .facts import DataUnavailable, Facts, Period, Value
-from .metrics import Metric, find_metrics, get_metric
+from .metrics import Metric, find_metrics, get_metric, is_exact_match
 
 STATEMENT_VI = {"CDKT": "Báo cáo tình hình tài chính", "KQKD": "Báo cáo kết quả hoạt động kinh doanh",
                 "LCTT": "Báo cáo lưu chuyển tiền tệ"}
@@ -79,6 +79,8 @@ class Analyst:
             v = self.value(m, p, basis)
         except (DataUnavailable, KeyError, ValueError) as e:
             return {"ok": False, "error": reason(e)}
+        if not is_exact_match(metric, m):                       # khớp mờ: nói rõ để mô hình/người dùng kiểm tra, không âm thầm trả số của chỉ tiêu khác
+            v.notes = [*v.notes, f"tên '{metric}' chỉ khớp gần đúng với chỉ tiêu '{m.name}'; nếu không đúng ý thì gọi search_metrics để chọn đúng chỉ tiêu"]
         text = (f"{m.name} {v.description}: {fmt_vnd(v.value)} VND (≈ {fmt_ty(v.value)} tỷ đồng). "
                 f"Nguồn: {_src_text(v.sources)}.")
         if v.notes:

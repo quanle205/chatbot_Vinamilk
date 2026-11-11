@@ -9,7 +9,7 @@ from collections import Counter
 from sklearn.metrics import classification_report, confusion_matrix
 
 from ..rag.text import accent_free
-from .dataset import LABELS, build
+from .dataset import LABELS, build, build_holdout
 from .intent import OOS, REFUSE_THRESHOLD, IntentClassifier, fit
 
 REAL_IN_SCOPE = [
@@ -33,6 +33,17 @@ def main():
     print("\n" + classification_report(y, pred, labels=LABELS, digits=3, zero_division=0))
     print("ma trận nhầm lẫn (hàng = thật, cột = dự đoán):", LABELS)
     print(confusion_matrix(y, pred, labels=LABELS))
+
+    ho = build_holdout()
+    hy = [l for _, l in ho]
+    hp = [clf.predict(q)[0] for q, _ in ho]
+    print(f"\n=== TẬP GIỮ LẠI SẠCH ({len(ho)} câu, mẫu câu mới viết sau khi chốt train) ===")
+    print(classification_report(hy, hp, labels=LABELS, digits=3, zero_division=0))
+    h_oos = [clf.predict_proba(q).get(OOS, 0.0) for q, l in ho if l == OOS]
+    h_in = [clf.predict_proba(q).get(OOS, 0.0) for q, l in ho if l != OOS]
+    print(f"Ngưỡng {REFUSE_THRESHOLD}: bắt ngoài phạm vi {sum(p >= REFUSE_THRESHOLD for p in h_oos)}/{len(h_oos)}; từ chối nhầm câu hợp lệ {sum(p >= REFUSE_THRESHOLD for p in h_in)}/{len(h_in)}")
+    for t in (0.5, 0.6, 0.7):
+        print(f"  ngưỡng {t}: {sum(p >= t for p in h_oos)}/{len(h_oos)} | nhầm {sum(p >= t for p in h_in)}/{len(h_in)}")
 
     refused = [(q, l) for q, l in d["test"] if clf.is_out_of_scope(q)]
     wrong = [q for q, l in refused if l != OOS]
