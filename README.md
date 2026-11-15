@@ -22,6 +22,8 @@ tăng trưởng, vẽ xu hướng. Số liệu lấy từ PDF bằng OCR, đã �
 
 ## Tính năng
 
+- **Doanh nghiệp:** tra cứu báo cáo của 11 công ty hàng tiêu dùng. Chatbot trả số có nguồn trang khi đã đối chiếu được chỉ tiêu, hoặc trích nội dung PDF liên quan. Gõ tên hoặc mã công ty trực tiếp trong Trò chuyện. Khi không nêu kỳ, chatbot dùng kỳ trong ngữ cảnh hoặc kỳ mới nhất có báo cáo. Xem [hướng dẫn nhập dữ liệu](docs/consumer-data.md).
+
 - **Hỏi đáp có dẫn chứng:** câu trả lời kèm nguồn (báo cáo, trang PDF, ảnh trang có khung đánh dấu dòng) và cảnh báo số không khớp.
 - **Biểu đồ xu hướng và bảng so sánh kỳ:** khi câu hỏi dẫn tới `get_series` (xu hướng nhiều kỳ) hoặc `get_growth` (so sánh hai kỳ),
   `/api/ask` trả thêm trường `charts` (kỳ, giá trị VND, đơn vị, nguồn) dựng từ kết quả công cụ, không từ lời mô hình.

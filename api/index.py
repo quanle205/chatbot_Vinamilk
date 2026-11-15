@@ -24,12 +24,14 @@ from google.genai import types  # noqa: E402
 from src.agent import AgentConfigError, VinamilkAgent  # noqa: E402
 from src.agent.charts import build_charts  # noqa: E402
 from src.agent.toolbox import Toolbox  # noqa: E402
+from src.consumer import analytics, catalog, repository, service  # noqa: E402
+from src.rag.text import fmt_vnd  # noqa: E402
 from src.feedback import get_store, make_record  # noqa: E402
 from src.ratios import build_ratios  # noqa: E402
 from src.stats import coverage  # noqa: E402
 from src.tools.registry import analyst, call_tool  # noqa: E402
 from src.web.ratelimit import RateLimiter  # noqa: E402
-from src.web.schemas import AskBody, ChartBody, FeedbackBody, LookupBody, RatiosBody  # noqa: E402
+from src.web.schemas import AskBody, ChartBody, ConsumerLookupBody, FeedbackBody, LookupBody, RatiosBody  # noqa: E402
 from src.web.sources import OFFICIAL_PDF_URLS, OFFICIAL_REPORTS_URL, collect_notes, source_links  # noqa: E402
 
 mimetypes.add_type("application/javascript", ".js")       # Windows đôi khi gán .js là text/plain, làm trình duyệt từ chối nạp module
@@ -80,6 +82,14 @@ def stats():
 @app.post("/api/ask")
 def ask(body: AskBody, request: Request):
     ASK_LIMIT.check(request)
+    companies = service.question_companies(body.question) or ([body.company] if body.company else [])
+    context = None
+    if not companies:
+        context = service.inherited_question(body.question, [t.text for t in body.history[-2 * MAX_HISTORY_TURNS:] if t.role == "user"])
+        if context:
+            companies = service.question_companies(context)
+    if companies:
+        return service.answer_question(body.question, companies, body.company_period, context)
     contents = [types.Content(role=t.role, parts=[types.Part(text=t.text)]) for t in body.history[-2 * MAX_HISTORY_TURNS:]]
     try:
         r = get_agent().ask(body.question, contents)
@@ -92,6 +102,46 @@ def ask(body: AskBody, request: Request):
         raise HTTPException(502, "Trợ lý đang bận hoặc gặp sự cố tạm thời. Bạn thử lại sau ít phút nhé.")
     return {"answer": r.answer, "sources": source_links(r.sources), "notes": collect_notes(r.tool_calls), "warnings": r.warnings,
             "unsupported_numbers": r.unsupported_numbers, "charts": build_charts(r.tool_calls), "clarify": r.clarify}
+
+
+@app.get("/api/consumer/catalog")
+def consumer_catalog():
+    available = {code: [] for code in analytics.COMPANIES}
+    available["VNM"] = analytics.periods("VNM", analyst())
+    for code, period in repository.coverage():
+        available[code].append(period)
+    periods = {**catalog.PERIODS, **{p: p for p in available["VNM"]}}
+    for code, values in available.items():
+        available[code] = [p for p in periods if p in values]
+    return {"companies": analytics.COMPANIES,
+            "comparison_limit": len(analytics.COMPANIES),
+            "metrics": {k: v[0] for k, v in catalog.METRICS.items()},
+            "periods": periods, "available": available}
+
+
+@app.post("/api/consumer/lookup")
+def consumer_lookup(body: ConsumerLookupBody, request: Request):
+    BROWSE_LIMIT.check(request)
+    companies = list(dict.fromkeys(body.companies))
+    if any(code not in analytics.COMPANIES for code in companies):
+        raise HTTPException(422, "Mã doanh nghiệp chưa được hỗ trợ.")
+    if body.metric not in catalog.METRICS or not any(
+        body.period in analytics.periods(code, analyst()) for code in companies
+    ):
+        raise HTTPException(422, "Kỳ hoặc chỉ tiêu chưa được hỗ trợ.")
+    if "VNM" in companies:
+        lines, sources = [], []
+        for code in companies:
+            record = analytics.value(code, body.period, body.metric, body.basis, analyst())
+            if record:
+                number, citation, scope = record
+                lines.append(f"- **{analytics.COMPANIES[code]}** · {fmt_vnd(number)} đồng ({scope}).")
+                sources.extend(citation)
+            else:
+                lines.append(f"- **{analytics.COMPANIES[code]}** · Chưa có số đã đối chiếu.")
+        label = catalog.METRICS[body.metric][0]
+        return service.result(f"**{label} · {body.period}**\n\n" + "\n".join(lines), sources)
+    return service.lookup(companies, body.metric, body.period, body.basis)
 
 
 @app.post("/api/lookup")
@@ -115,6 +165,23 @@ def _lookup_failure(metric: str, error: str) -> str:
 def chart(body: ChartBody, request: Request):
     """Biểu đồ/bảng cho mục Xu hướng & so sánh: gọi thẳng công cụ (không qua Gemini) rồi dựng bằng cùng build_charts như khi hỏi đáp."""
     BROWSE_LIMIT.check(request)
+    companies = list(dict.fromkeys(body.companies))
+    if body.mode == "companies" or companies not in ([], ["VNM"]):
+        if not companies or any(code not in analytics.COMPANIES for code in companies):
+            raise HTTPException(422, "Mã doanh nghiệp chưa được hỗ trợ.")
+        if body.mode == "explain" or any(m not in catalog.METRICS for m in body.metrics):
+            raise HTTPException(422, "Kiểu phân tích hoặc chỉ tiêu chưa được hỗ trợ cho lựa chọn này.")
+        if body.mode == "companies" and len(companies) < 2:
+            raise HTTPException(422, "Chọn ít nhất hai doanh nghiệp để so sánh.")
+        if body.mode != "series" and (not body.period or not all(
+            body.period in analytics.periods(code, analyst()) for code in companies
+        )):
+            raise HTTPException(422, "Chọn kỳ có báo cáo của các doanh nghiệp.")
+        if body.mode == "growth" and (not body.period.startswith("Q") or
+                                      (body.kind == "qoq" and body.basis == "luy_ke")):
+            raise HTTPException(422, "Chọn kỳ quý và cơ sở so sánh phù hợp.")
+        return {"charts": analytics.chart(companies, body.metrics, body.mode, body.period,
+                                          body.basis, body.kind, analyst())}
     if body.mode != "series" and not body.period:
         raise HTTPException(422, "Chế độ này cần chọn kỳ báo cáo.")
     calls = []
@@ -137,9 +204,24 @@ def ratios(body: RatiosBody, request: Request):
     """Bảng chỉ số tài chính của một kỳ (mục Chỉ số tài chính): gọi thẳng công cụ tính tỷ số, không qua Gemini."""
     BROWSE_LIMIT.check(request)
     try:
-        res = build_ratios(analyst(), body.period, body.basis)
+        companies = list(dict.fromkeys(body.companies or [body.company]))
+        if any(code not in analytics.COMPANIES for code in companies):
+            raise ValueError("Mã doanh nghiệp chưa được hỗ trợ.")
+        if len(companies) > 1:
+            return {"period": body.period, "comparison": [
+                {"company": code, "name": analytics.COMPANIES[code],
+                 "groups": company_ratios(code, body.period, body.basis)["groups"]}
+                for code in companies
+            ]}
+        return company_ratios(companies[0], body.period, body.basis)
     except ValueError as e:
         raise HTTPException(422, str(e))
+
+
+def company_ratios(company, period, basis):
+    if company != "VNM":
+        return analytics.ratios(company, period, basis, analyst())
+    res = build_ratios(analyst(), period, basis)
     for group in res["groups"]:
         for item in group["items"]:
             item["sources"] = source_links(item.get("sources", []))
@@ -160,7 +242,8 @@ def feedback(body: FeedbackBody, request: Request):
 @app.get("/", response_class=HTMLResponse)
 def index():
     page = ROOT / "public" / "index.html"
-    return page.read_text(encoding="utf-8") if page.exists() else "<h1>Chatbot BCTC Vinamilk</h1>"
+    html = page.read_text(encoding="utf-8") if page.exists() else "<h1>Chatbot BCTC Vinamilk</h1>"
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
 
 # Tệp tĩnh (css, js, ảnh trang PDF). Trên Vercel thư mục public/ do CDN phục vụ; mount này để chạy cục bộ giống bản triển khai.

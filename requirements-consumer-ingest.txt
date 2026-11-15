@@ -1,0 +1,4 @@
+# Chỉ cần khi dựng lại DuckDB từ PDF. Máy chủ dùng requirements.txt.
+PyMuPDF==2.1
+rapidocr==3.10.0
+onnxruntime==1.32.0

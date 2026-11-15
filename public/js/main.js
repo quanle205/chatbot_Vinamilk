@@ -7,14 +7,15 @@ import { vn } from "./format.js";
 import { store } from "./storage.js";
 import { onPeriod, setPeriod } from "./state.js";
 import { initLookup } from "./views/lookup.js";
+import { initConsumer } from "./views/consumer.js";
 import { getStats } from "./stats.js";
-import { initRatios, showRatios } from "./views/ratios.js";
-import { initTrends } from "./views/trends.js";
+import { initRatios, showRatios } from "./views/ratios.js?v=multi-company";
+import { initTrends } from "./views/trends.js?v=multi-company";
 
-const VIEW_TITLES = { lookup: "Tra cứu số liệu", trends: "Xu hướng & so sánh", ratios: "Chỉ số tài chính" };
+const VIEW_TITLES = { lookup: "Tra cứu số liệu", trends: "Xu hướng & so sánh", ratios: "Chỉ số tài chính", consumer: "Doanh nghiệp" };
 const FEATURES = [                                                      // lối tắt ở màn hình chào tới các chức năng chính
   ["lookup", "book", "Tra cứu số liệu", "Một chỉ tiêu, một kỳ, kèm trang PDF"],
-  ["trends", "zigzag", "Xu hướng & so sánh", "Biểu đồ 6 kỳ, hai kỳ, phân rã"],
+  ["trends", "zigzag", "Xu hướng & so sánh", "Theo quý hoặc so sánh doanh nghiệp"],
   ["ratios", "ratio", "Chỉ số tài chính", "Sinh lời, thanh khoản, đòn bẩy"],
 ];
 const views = ["chat", ...Object.keys(VIEW_TITLES)];
@@ -37,6 +38,7 @@ function showView(name) {
   document.querySelectorAll(".nav-item[data-view]").forEach(b => (b.dataset.view === name ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")));
   refreshTitle(); closeSide();
   if (name === "ratios") showRatios();
+  if (name === "consumer") initConsumer();
 }
 
 // ------------------------------------------------------------------ kỳ báo cáo (menu thả xuống ở thanh trên)

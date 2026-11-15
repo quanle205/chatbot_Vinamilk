@@ -135,7 +135,7 @@ function setBusy(on) {
   send.disabled = on ? false : !input().value.trim();
 }
 
-async function ask(question, regenerate = false) {
+async function ask(question, regenerate = false, savedScope) {
   question = question.trim();
   if (busy || !question) return;
   if (!cur) {
@@ -143,13 +143,17 @@ async function ask(question, regenerate = false) {
     convs.unshift(cur);
   }
   if (!regenerate) cur.msgs.push({ role: "user", text: question });
-  const bot = { role: "bot", pending: true, question };
+  const bot = { role: "bot", pending: true, question, scope: savedScope };
   cur.msgs.push(bot);
   cur.updated = Date.now();
   renderConv(true); renderRecent(); setBusy(true);
   ctrl = new AbortController();
   try {
-    const r = await post("/api/ask", { question: withPeriod(question), history: historyBefore(cur.msgs.length - 1) }, ctrl.signal);
+    const r = await post("/api/ask", {
+      question: savedScope?.company ? question : withPeriod(question),
+      ...savedScope,
+      history: historyBefore(cur.msgs.length - 1),
+    }, ctrl.signal);
     if (!r.ok) throw Object.assign(new Error(chatError(r.status, r.data)), { http: r.status });
     delete bot.pending;
     Object.assign(bot, { text: r.data.answer, sources: r.data.sources || [], notes: r.data.notes || [], charts: r.data.charts || [],
@@ -167,7 +171,7 @@ function retry(msg) {                                   // bỏ câu trả lời
   const i = cur ? cur.msgs.indexOf(msg) : -1;
   if (busy || i < 0) return;
   cur.msgs.splice(i, 1);
-  ask(msg.question, true);
+  ask(msg.question, true, msg.scope);
 }
 
 // ------------------------------------------------------------------ thanh bên: cuộc trò chuyện gần đây

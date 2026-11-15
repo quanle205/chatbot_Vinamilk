@@ -197,6 +197,9 @@
   .composer textarea { display:block; width:100%; border:0; outline:0; resize:none; background:transparent; font-size:var(--fs-md); line-height:1.5; max-height:160px; padding:2px 0; }
   .composer textarea::placeholder { color:var(--mute); }
   .comp-row { display:flex; align-items:center; gap:12px; margin-top:4px; }
+  #consumer-form label { min-width:0; max-width:100%; }
+  #consumer-form select { max-width:100%; }
+  #consumer-out > .md { white-space:normal; }
   .ctx { color:var(--mute); font-size:var(--fs-sm); flex:1; min-width:0; }
   .send { width:38px; height:38px; border-radius:50%; border:0; display:grid; place-items:center; background:var(--accent); color:var(--accent-ink); flex:none; box-shadow:0 4px 12px rgba(0,0,0,.12); }
   .send:disabled { background:var(--line); color:var(--mute); cursor:default; box-shadow:none; }
@@ -213,6 +216,10 @@
   .form-row input[type=text], .form-row input[type=search] { min-width:240px; }
   .form-row .grow { flex:1; }
   .form-row .check { flex-direction:row; align-items:center; gap:8px; padding-bottom:10px; }
+  .company-picker { position:relative; max-width:100%; }
+  .company-picker summary { cursor:pointer; padding:9px 12px; border:1px solid var(--line); border-radius:10px; color:var(--ink); background:var(--bg); }
+  .company-options { max-height:240px; overflow:auto; padding:6px; border:1px solid var(--line); border-radius:10px; background:var(--card); }
+  .form-row .company-options label { flex-direction:row; align-items:center; gap:8px; padding:5px; color:var(--ink); }
   .out-card { border:1px solid var(--line); border-radius:16px; padding:14px 16px; background:var(--card); white-space:pre-wrap; overflow-wrap:anywhere; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
   .chip { padding:5px 12px; border:1px solid var(--line); background:var(--card); border-radius:999px; font-size:var(--fs-sm); }

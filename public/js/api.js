@@ -1,11 +1,11 @@
 // Gọi API và đổi lỗi thành thông báo tiếng Việt. Mọi màn hình dùng chung để xử lý lỗi giống nhau.
 export const NETWORK_ERROR = "Không kết nối được tới máy chủ. Bạn kiểm tra mạng rồi thử lại nhé.";
 
-async function request(url, { method = "GET", body, signal } = {}) {
-  const r = await fetch(url, { method, signal, headers: body ? { "Content-Type": "application/json" } : undefined, body: body ? JSON.stringify(body) : undefined });
+async function request(url, { method = "GET", body, signal, cache } = {}) {
+  const r = await fetch(url, { method, signal, cache, headers: body ? { "Content-Type": "application/json" } : undefined, body: body ? JSON.stringify(body) : undefined });
   return { ok: r.ok, status: r.status, data: await r.json().catch(() => ({})) };
 }
-export const get = url => request(url);
+export const get = (url, options) => request(url, options);
 export const post = (url, body, signal) => request(url, { method: "POST", body, signal });
 
 // Thông báo cho người dùng từ mã lỗi; máy chủ đã trả `detail` tiếng Việt cho 400/422/429/5xx thì dùng lại.

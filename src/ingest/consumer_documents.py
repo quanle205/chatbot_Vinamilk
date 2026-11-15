@@ -1,0 +1,107 @@
+"""Lập chỉ mục từng trang PDF và giữ nguồn cho từng tài liệu."""
+from collections import defaultdict
+import json
+from pathlib import Path
+import re
+
+from src.consumer.catalog import fold
+from src.ingest.consumer_statements import (
+    page_header, read_balance, read_cash_flow, read_income, statement_scope, uses_vnd,
+)
+from src.ingest.consumer_ocr import INTERIM, RAW, inputs
+
+DOCUMENT_CURRENCY = re.compile(r"don vi tien te.{0,110}dong viet nam.{0,12}\bvnd\b")
+
+
+def note_chunks(boxes, chunk_lines=12, overlap=3, whole_page=False):
+    tokens = boxes if whole_page else [b for b in boxes if .09 < b[1] < .95 and .06 < b[0] < .93]
+    lines = []
+    for box in sorted(tokens, key=lambda b: (b[1], b[0])):
+        if lines and box[1] - lines[-1][0][1] < .005:
+            lines[-1].append(box)
+        else:
+            lines.append([box])
+    content = [" ".join(b[4] for b in sorted(line, key=lambda b: b[0])) for line in lines]
+    for start in range(0, len(content), chunk_lines - overlap):
+        chunk = "\n".join(content[start:start + chunk_lines])
+        if len(chunk) >= (25 if whole_page else 100):
+            yield chunk
+
+
+def report_period(row):
+    if period := row.get("period"):
+        year, quarter = period.split("-")
+        return f"{quarter}/{year}"
+    year = int(row["period_end"][:4])
+    if row["company_code"] == "SBT":
+        return f"FY{year - 1}-{year}"
+    return f"FY{year}"
+
+
+def add_documents(db):
+    db.execute("""create table documents(
+        id varchar primary key, company varchar, period varchar, url varchar,
+        statement varchar, pages integer, indexed_pages integer
+    )""")
+    db.execute("""create table document_chunks(
+        id varchar, page integer, ordinal integer, content varchar,
+        primary key(id, page, ordinal)
+    )""")
+    db.execute("""create table document_facts(
+        id varchar, metric varchar, basis varchar, value bigint, page integer, scope varchar, statement varchar
+    )""")
+    documents, chunks = [], []
+    candidates = defaultdict(list)
+    verified_periods = set(db.execute("select company, period from reports").fetchall())
+    for row in inputs():
+        path = Path(row["file"])
+        if not (RAW / path).is_file():
+            raise FileNotFoundError(RAW / path)
+        section = path.stem.rsplit("-", 1)[-1]
+        section = section if section in {"CDKT", "KQKD", "LCTT"} else "Báo cáo"
+        company, period = row["company_code"], report_period(row)
+        needs_facts = (company, period) not in verified_periods
+        balance_pages = []
+        indexed = 0
+        pages = []
+        default_vnd = False
+        for file in sorted((INTERIM / path.stem).glob("*.json")):
+            boxes = json.loads(file.read_text(encoding="utf-8"))
+            page = int(file.stem)
+            parts = list(note_chunks(boxes, whole_page=True))
+            if parts:
+                indexed += 1
+                chunks.extend((path.stem, page, i, part) for i, part in enumerate(parts))
+            if needs_facts:
+                pages.append((page, boxes))
+                if not default_vnd:
+                    default_vnd = any(DOCUMENT_CURRENCY.search(fold(" ".join(part.split()))) for part in parts)
+        for page, boxes in pages:
+            header = page_header(boxes)
+            if not uses_vnd(header, default_vnd):
+                continue
+            if section in {"Báo cáo", "KQKD"}:
+                for (metric, basis), (value, scope) in read_income(boxes, header, period, company, section == "KQKD").items():
+                    candidates[company, period, metric, basis].append(
+                        (path.stem, metric, basis, value, page, scope, "KQKD"))
+            if section == "CDKT" or (section == "Báo cáo" and
+                                     ("tinh hinh tai chinh" in header or "doi ke toan" in header)):
+                balance_pages.append((page, boxes, statement_scope(header)))
+            if section in {"Báo cáo", "LCTT"}:
+                for (metric, basis), (value, scope) in read_cash_flow(boxes, header, period, company, section == "LCTT").items():
+                    candidates[company, period, metric, basis].append(
+                        (path.stem, metric, basis, value, page, scope, "LCTT"))
+        for (metric, basis), (value, page, scope) in read_balance(balance_pages).items():
+            candidates[company, period, metric, basis].append(
+                (path.stem, metric, basis, value, page, scope, "CDKT"))
+        documents.append((path.stem, company, period,
+                          row["source_url"], section, row["pages"], indexed))
+    db.executemany("insert into documents values (?,?,?,?,?,?,?)", documents)
+    if chunks:
+        db.executemany("insert into document_chunks values (?,?,?,?)", chunks)
+    facts = [values[0] for values in candidates.values()
+             if len({row[3] for row in values}) == 1]
+    if facts:
+        db.executemany("insert into document_facts values (?,?,?,?,?,?,?)", facts)
+    print(f"{len(documents)} PDF, {sum(row[-1] for row in documents)} trang có văn bản, "
+          f"{len(chunks)} đoạn, {len(facts)} chỉ tiêu được đối chiếu tự động")
