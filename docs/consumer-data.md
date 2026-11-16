@@ -2,7 +2,7 @@
 
 Danh mục gồm BBC, BHN, CMF, KDC, MCH, MCM, PAN, QNS, SAB, SBT và VCF. Kho nguồn có 99 PDF, bao phủ bốn quý năm 2025 cho cả 11 công ty. Riêng BBC chưa có báo cáo ba quý đầu năm 2026 trong kho. CMF chưa có bảng kết quả kinh doanh Q3/2026. Báo cáo năm của SBT dùng niên độ kết thúc ngày 30/6.
 
-Gõ tên hoặc mã công ty trực tiếp trong ô chat. Câu hỏi tiếp theo có thể dùng tên và kỳ từ câu hỏi trước. Khi không nêu kỳ, chatbot dùng kỳ mới nhất có báo cáo. Màn hình **Doanh nghiệp** cho phép tra cứu và so sánh cùng kỳ.
+Phần Trò chuyện chỉ trả lời về Vinamilk. Dữ liệu 11 công ty được tra cứu và so sánh cùng kỳ ở màn hình **Doanh nghiệp** (`/api/consumer/lookup`, `/api/chart`, `/api/ratios`).
 
 Với chỉ tiêu đã đối chiếu, chatbot trả về giá trị có đơn vị và nguồn từng trang. Với các tài liệu khác, chatbot tìm dòng hoặc đoạn văn có liên quan trong nội dung đã đọc. Nội dung OCR cần kiểm tra lại ở PDF, đặc biệt khi báo cáo có nhiều cột hoặc dùng đơn vị nghìn đồng. Nếu trang chưa có văn bản hoặc không tìm được dòng phù hợp, chatbot vẫn trả link báo cáo đúng công ty và kỳ.
 
@@ -40,11 +40,6 @@ python -m src.ingest.consumer_ocr --windows-ocr
 
 Số dư dùng giá trị cuối kỳ. Kết quả kinh doanh lấy đúng cột riêng quý hoặc lũy kế công bố. Dòng tiền riêng Q2 và Q3 lấy hiệu lũy kế, với nguồn cho hai kỳ. Số trong các đoạn thuyết minh là văn bản OCR, có thể còn lỗi nhận dạng.
 
-## Thử trên chatbot
+## Thử ở màn hình Doanh nghiệp
 
-- Doanh thu thuần riêng Q3/2026 của MCM là bao nhiêu?
-- So sánh doanh thu thuần Q3/2026 của MCM và QNS.
-- Thuyết minh hàng tồn kho của QNS năm 2025.
-- Doanh thu quý hai năm 2025 của Đường Quảng Ngãi.
-- Báo cáo tài chính quý 2/2025 của Cholimex Food.
-- Báo cáo niên độ 2025–2026 của AgriS.
+Chọn công ty, kỳ và chỉ tiêu, ví dụ: doanh thu thuần Q3/2026 của MCM và QNS; hàng tồn kho của QNS năm 2025; báo cáo Q2/2025 của Cholimex Food.

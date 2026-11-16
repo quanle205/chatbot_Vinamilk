@@ -82,14 +82,12 @@ def stats():
 @app.post("/api/ask")
 def ask(body: AskBody, request: Request):
     ASK_LIMIT.check(request)
-    companies = service.question_companies(body.question) or ([body.company] if body.company else [])
-    context = None
-    if not companies:
-        context = service.inherited_question(body.question, [t.text for t in body.history[-2 * MAX_HISTORY_TURNS:] if t.role == "user"])
-        if context:
-            companies = service.question_companies(context)
-    if companies:
-        return service.answer_question(body.question, companies, body.company_period, context)
+    others = [c for c in service.question_companies(body.question) if c != "VNM"]
+    if others:                                   # phần trò chuyện chỉ có dữ liệu Vinamilk; doanh nghiệp khác xem ở mục Doanh nghiệp
+        names = ", ".join(analytics.COMPANIES[c] for c in others if c in analytics.COMPANIES)
+        return {"answer": f"Phần trò chuyện chỉ trả lời về báo cáo tài chính hợp nhất của Vinamilk, chưa có dữ liệu về {names}. "
+                          "Bạn có thể hỏi về Vinamilk, hoặc dùng mục Doanh nghiệp để tra cứu và so sánh các công ty khác.",
+                "sources": [], "notes": [], "warnings": [], "unsupported_numbers": [], "charts": [], "clarify": None}
     contents = [types.Content(role=t.role, parts=[types.Part(text=t.text)]) for t in body.history[-2 * MAX_HISTORY_TURNS:]]
     try:
         r = get_agent().ask(body.question, contents)
