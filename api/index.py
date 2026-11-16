@@ -83,10 +83,10 @@ def stats():
 def ask(body: AskBody, request: Request):
     ASK_LIMIT.check(request)
     others = [c for c in service.question_companies(body.question) if c != "VNM"]
-    if others:                                   # phần trò chuyện chỉ có dữ liệu Vinamilk; doanh nghiệp khác xem ở mục Doanh nghiệp
+    if others:                                   # phần trò chuyện chỉ có dữ liệu Vinamilk; doanh nghiệp khác xem ở mục Tra cứu số liệu
         names = ", ".join(analytics.COMPANIES[c] for c in others if c in analytics.COMPANIES)
         return {"answer": f"Phần trò chuyện chỉ trả lời về báo cáo tài chính hợp nhất của Vinamilk, chưa có dữ liệu về {names}. "
-                          "Bạn có thể hỏi về Vinamilk, hoặc dùng mục Doanh nghiệp để tra cứu và so sánh các công ty khác.",
+                          "Bạn có thể hỏi về Vinamilk, hoặc dùng mục Tra cứu số liệu để tra cứu và so sánh các công ty khác.",
                 "sources": [], "notes": [], "warnings": [], "unsupported_numbers": [], "charts": [], "clarify": None}
     contents = [types.Content(role=t.role, parts=[types.Part(text=t.text)]) for t in body.history[-2 * MAX_HISTORY_TURNS:]]
     try:

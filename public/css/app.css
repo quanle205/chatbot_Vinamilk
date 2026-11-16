@@ -197,9 +197,9 @@
   .composer textarea { display:block; width:100%; border:0; outline:0; resize:none; background:transparent; font-size:var(--fs-md); line-height:1.5; max-height:160px; padding:2px 0; }
   .composer textarea::placeholder { color:var(--mute); }
   .comp-row { display:flex; align-items:center; gap:12px; margin-top:4px; }
-  #consumer-form label { min-width:0; max-width:100%; }
-  #consumer-form select { max-width:100%; }
-  #consumer-out > .md { white-space:normal; }
+  #lookup-form label { min-width:0; max-width:100%; }
+  #lookup-form select { max-width:100%; }
+  #lk-out > .md { white-space:normal; }
   .ctx { color:var(--mute); font-size:var(--fs-sm); flex:1; min-width:0; }
   .send { width:38px; height:38px; border-radius:50%; border:0; display:grid; place-items:center; background:var(--accent); color:var(--accent-ink); flex:none; box-shadow:0 4px 12px rgba(0,0,0,.12); }
   .send:disabled { background:var(--line); color:var(--mute); cursor:default; box-shadow:none; }

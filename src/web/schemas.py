@@ -24,7 +24,7 @@ class AskBody(BaseModel):
 
 
 class ConsumerLookupBody(BaseModel):
-    companies: list[str] = Field(min_length=1, max_length=2)
+    companies: list[str] = Field(min_length=1, max_length=len(COMPANIES) + 1)      # Vinamilk + các công ty trong danh mục
     period: str = Field(max_length=12)
     metric: str = Field(max_length=50)
     basis: str = Field(default="quy", pattern=BASIS)

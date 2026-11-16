@@ -34,6 +34,15 @@ def main():
     assert all(source["url"].endswith(f"#page={source['page']}") for source in data["sources"])
     assert "riêng" in data["answer"] and "hợp nhất" in data["answer"]
     assert client.post("/api/consumer/lookup", json={**payload, "companies": ["VNM"], "period": "Q2/2026"}).json()["sources"]
+    many = client.post("/api/consumer/lookup", json={"companies": ["VNM", "MCM", "QNS", "KDC"], "period": "Q2/2026", "metric": "doanh_thu_thuan"})
+    assert many.status_code == 200, many.text
+    text = many.json()["answer"]
+    assert all(name in text for name in ("Vinamilk", "Mộc Châu Milk", "Đường Quảng Ngãi", "KIDO")), text      # nhiều hơn hai doanh nghiệp, có cả Vinamilk
+    assert "18.847.347.464.988" in text and "1.863.834.355.125" in text and len(many.json()["sources"]) >= 3
+    many_peers = client.post("/api/consumer/lookup", json={"companies": ["MCM", "QNS", "KDC"], "period": "Q2/2026", "metric": "doanh_thu_thuan"}).json()
+    assert "KIDO" in many_peers["answer"] and "1.863.834.355.125" in many_peers["answer"]
+    assert client.post("/api/consumer/lookup", json={"companies": ["VNM"], "period": "Q2/2026", "metric": "doanh_thu_thuan"}).json()["sources"]
+    assert client.post("/api/consumer/lookup", json={"companies": ["XXX"], "period": "Q2/2026", "metric": "doanh_thu_thuan"}).status_code == 422
     cashflow = client.post("/api/consumer/lookup", json={**payload, "metric": "dong_tien_kinh_doanh"}).json()
     assert len(cashflow["sources"]) == 4 and "37.215.420.363" in cashflow["answer"]
     profit = client.post("/api/consumer/lookup", json={**payload, "metric": "loi_nhuan_sau_thue"}).json()

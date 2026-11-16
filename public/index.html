@@ -50,7 +50,6 @@
       <button class="nav-item" type="button" data-view="lookup"><svg class="ic" aria-hidden="true"><use href="#i-book"/></svg><span class="t">Tra cứu số liệu</span></button>
       <button class="nav-item" type="button" data-view="trends"><svg class="ic" aria-hidden="true"><use href="#i-zigzag"/></svg><span class="t">Xu hướng &amp; so sánh</span></button>
       <button class="nav-item" type="button" data-view="ratios"><svg class="ic" aria-hidden="true"><use href="#i-ratio"/></svg><span class="t">Chỉ số tài chính</span></button>
-      <button class="nav-item" type="button" data-view="consumer"><svg class="ic" aria-hidden="true"><use href="#i-book"/></svg><span class="t">Doanh nghiệp</span></button>
     </nav>
     <div class="label t" id="recent-label">Cuộc trò chuyện</div>
     <ul class="recent" id="recent" aria-labelledby="recent-label"></ul>
@@ -107,18 +106,18 @@
     <section class="view" id="view-lookup" aria-label="Tra Cứu Số Liệu" hidden>
       <div class="scroll"><div class="col">
         <h2 class="page-title">Tra cứu số liệu</h2>
-        <p class="muted">Tra trực tiếp một chỉ tiêu trong báo cáo hợp nhất, không qua trợ lý. Kết quả kèm nguồn trang PDF.</p>
+        <p class="muted">Tra một chỉ tiêu trong báo cáo tài chính của Vinamilk và 11 công ty hàng tiêu dùng, có thể so sánh nhiều doanh nghiệp cùng kỳ. Không qua trợ lý; kết quả kèm nguồn trang PDF.</p>
         <form class="form-row" id="lookup-form">
-          <label>Chỉ tiêu<input id="lk-metric" type="text" list="metric-list" value="doanh thu thuần" maxlength="100" autocomplete="off"></label>
-          <datalist id="metric-list">
-            <option value="Doanh thu thuần"><option value="Giá vốn hàng bán"><option value="Lợi nhuận gộp"><option value="Lợi nhuận sau thuế">
-            <option value="Tổng tài sản"><option value="Nợ phải trả"><option value="Vốn chủ sở hữu"><option value="Hàng tồn kho">
-          </datalist>
+          <label>Doanh nghiệp<select id="lk-company" disabled><option value="VNM">Vinamilk</option></select></label>
+          <details id="lk-peers" class="company-picker"><summary>Chọn thêm doanh nghiệp để so sánh</summary><div class="company-options"></div></details>
+          <label>Chỉ tiêu<select id="lk-metric"><option value="doanh_thu_thuan">Doanh thu thuần</option></select></label>
           <label>Kỳ báo cáo<select id="lk-period"></select></label>
           <label>Cách tính<select id="lk-basis"><option value="quy" selected>Riêng quý</option><option value="luy_ke">Lũy kế từ đầu năm</option></select></label>
-          <button class="btn primary" type="submit">Tra số</button>
+          <button class="btn primary" type="submit" disabled>Tra số</button>
         </form>
-        <div class="out-card" id="lk-out" aria-live="polite">Chọn chỉ tiêu và kỳ rồi bấm Tra số.</div>
+        <p id="lk-company-status" class="note" role="status" hidden></p>
+        <p id="lk-note" class="note" role="status" hidden></p>
+        <div class="out-card" id="lk-out" aria-live="polite">Chọn doanh nghiệp, chỉ tiêu và kỳ rồi bấm Tra số.</div>
       </div></div>
     </section>
 
@@ -144,21 +143,6 @@
         <p id="c-company-status" class="note" role="status" hidden></p>
         <div id="c-compare-status" role="status" class="note"></div>
         <div id="chart-out" aria-live="polite"><p class="note">Chọn kiểu và chỉ tiêu rồi bấm Vẽ biểu đồ.</p></div>
-      </div></div>
-    </section>
-
-    <section class="view" id="view-consumer" aria-label="Doanh nghiệp" hidden>
-      <div class="scroll"><div class="col">
-        <h2 class="page-title">Tra cứu và so sánh doanh nghiệp</h2>
-        <form class="form-row" id="consumer-form">
-          <label>Doanh nghiệp<select id="consumer-primary"></select></label>
-          <label>So sánh với<select id="consumer-secondary"></select></label>
-          <label>Kỳ báo cáo<select id="consumer-period"></select></label>
-          <label>Chỉ tiêu<select id="consumer-metric"></select></label>
-          <label>Cách tính<select id="consumer-basis"><option value="quy">Riêng quý</option><option value="luy_ke">Lũy kế</option></select></label>
-          <button class="btn primary" type="submit" disabled>Tra cứu</button>
-        </form>
-        <div class="out-card" id="consumer-out" aria-live="polite">Chọn doanh nghiệp, chỉ tiêu và kỳ.</div>
       </div></div>
     </section>
 
