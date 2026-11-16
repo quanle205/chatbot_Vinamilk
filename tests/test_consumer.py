@@ -156,6 +156,19 @@ def main():
     from src.consumer.service import question_companies
     assert question_companies("tài chính quý 1 năm 2025 của công ty habenco") == ["BHN"]      # gõ sai tên vẫn nhận ra
     assert question_companies("Vinamilk doanh thu quý 2/2025") == []                          # không nhận nhầm công ty khác
+    cmp = client.post("/api/ask", json={"question": "so sánh tổng doanh thu quý 1 của công ty Vinamilk với công ty Đường Quảng Ngãi"}).json()
+    assert "16.148,7" in cmp["answer"] and "2.763,4" in cmp["answer"] and "gấp 5,8 lần" in cmp["answer"] and "Lãi, lỗ sau thuế" in cmp["answer"]
+    assert any(s["doc"].startswith("q1-2026") for s in cmp["sources"]) and any(s["doc"].startswith("QNS") for s in cmp["sources"])
+    ASK_LIMIT.reset()
+    everyone = client.post("/api/ask", json={"question": "công ty nào doanh thu cao nhất năm 2025"}).json()       # cả danh mục, gồm Vinamilk
+    assert "| 1 | Vinamilk | 63.645,9" in everyone["answer"] and "Sabeco" in everyone["answer"] and "Năm 2025" in everyone["answer"]
+    others = client.post("/api/ask", json={"question": "so sánh mcm và qns"}).json()                              # không có Vinamilk, không nêu kỳ
+    assert "So sánh Q3/2026: Mộc Châu Milk và Đường Quảng Ngãi" in others["answer"] and "692,8" in others["answer"]
+    quarters = client.post("/api/ask", json={"question": "doanh thu của mcm qua các quý"}).json()
+    assert all(text in quarters["answer"] for text in ("| Q1/2025 | 591,2 |", "| Q3/2026 | 692,8 |")) and quarters["sources"]
+    margin = client.post("/api/ask", json={"question": "biên lợi nhuận gộp của Mộc Châu Milk năm 2025"}).json()
+    assert "28,1%" in margin["answer"] and margin["sources"]
+    assert question_companies("các công ty con của Vinamilk") == []
     print("PASS: nhận diện 11 công ty, nguồn của 99 PDF, tra cứu, so sánh, dòng tiền và thuyết minh.")
 
 

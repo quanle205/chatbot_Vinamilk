@@ -28,10 +28,25 @@ def fuzzy_companies(query):
     return found
 
 
+ALL_WORDS = ("tat ca cac cong ty", "tat ca cong ty", "cac cong ty", "nhung cong ty", "cong ty nao", "moi cong ty",
+             "tat ca cac doanh nghiep", "tat ca doanh nghiep", "cac doanh nghiep", "nhung doanh nghiep", "doanh nghiep nao",
+             "tat ca cac ma", "cac ma co phieu", "toan nganh", "ca nganh", "trong nganh", "trong danh muc")
+COMPARE_WORDS = ("so sanh", "so voi", "xep hang", "cao nhat", "thap nhat", "lon nhat", "nho nhat", "nhieu nhat", "it nhat",
+                 "cao hon", "thap hon", "lon hon", "nho hon", "hon kem", "doi chieu")
+SERIES_WORDS = ("qua cac quy", "cac quy", "theo quy", "tung quy", "theo tung quy", "qua cac ky", "cac ky", "dien bien", "xu huong")
+RATIO_WORDS = ("bien loi nhuan", "bien lai", "bien gop", "bien rong", "ty suat loi nhuan", "ty le no", "he so no", "no tren von", "don bay")
+VNM_WORDS = ("vinamilk", "vnm")
+
+
+def asks_all(query):
+    """Câu hỏi nói về cả danh mục ("tất cả các công ty", "công ty nào cao nhất"), không tính "các công ty con" của một doanh nghiệp."""
+    return matches(query, ALL_WORDS) and not matches(query, ("cong ty con", "cong ty lien ket", "cong ty me"))
+
+
 def question_companies(question):
     query = fold(question)
     exact = [code for code, (_, aliases) in COMPANIES.items() if matches(query, (code.lower(), *aliases))]
-    return exact or fuzzy_companies(query)
+    return exact or fuzzy_companies(query) or (list(COMPANIES) if asks_all(query) else [])
 
 
 def question_metrics(query):
@@ -185,6 +200,267 @@ def summary(companies, period):
     return result("\n".join(lines).strip(), list(sources.values()), list(dict.fromkeys(notes)))
 
 
+COMPARE_METRICS = ("doanh_thu_thuan", "loi_nhuan_gop", "loi_nhuan_truoc_thue", "loi_nhuan_sau_thue", "tong_tai_san", "no_phai_tra", "von_chu_so_huu")
+VNM_QUARTERS = ("Q1/2025", "Q2/2025", "Q3/2025", "Q4/2025", "Q1/2026", "Q2/2026")
+VNM_METRICS = {"dong_tien_kinh_doanh": "luu_chuyen_hdkd", "dong_tien_dau_tu": "luu_chuyen_dau_tu", "dong_tien_tai_chinh": "luu_chuyen_tai_chinh"}
+POINT_METRICS = {"tong_tai_san", "no_phai_tra", "von_chu_so_huu", "hang_ton_kho"}
+WIDE_LIMIT = 4                                             # tới 4 bên: mỗi bên một cột; nhiều hơn: mỗi công ty một dòng, xếp hạng
+
+
+def _pct(x):
+    return f"{x * 100:.1f}%".replace(".", ",")
+
+
+def _times(a, b):
+    return f"{a / b:.1f}".replace(".", ",") if b else "—"
+
+
+def entity_name(code):
+    return "Vinamilk" if code == "VNM" else COMPANIES[code][0]
+
+
+def vinamilk_values(period, metrics=COMPARE_METRICS, basis="quy"):
+    """Số Vinamilk (financials.duckdb) cho một kỳ của danh mục công ty; FY2025 là số lũy kế cả năm (quý 4/2025)."""
+    from src.tools.registry import call_tool
+    from src.web.sources import source_links
+    if period == "FY2025":
+        view = ("Q4/2025", "luy_ke")
+    elif period in VNM_QUARTERS:
+        view = (period, basis)
+    else:
+        return {}, []
+    values, sources = {}, []
+    for metric in metrics:
+        key = VNM_METRICS.get(metric, metric)
+        res = call_tool("get_metric", {"metric": key, "period": view[0], "basis": view[1]})
+        if res.get("ok") and res.get("metric", key) == key and isinstance(res.get("value"), (int, float)):
+            values[metric] = res["value"]
+            sources.extend(res.get("sources") or [])
+    return values, source_links(sources)
+
+
+def company_values(code, period, metrics=COMPARE_METRICS, basis="quy"):
+    rows = repository.fact_rows([code], [period], list(metrics), basis)
+    values = {metric: value for _, _, metric, value, *_ in rows}
+    sources = [repository.source(code, period, scope, page, url, statement) for _, _, _, _, statement, page, url, scope, _ in rows]
+    scopes = [row[7] for row in rows]
+    return values, sources, max(set(scopes), key=scopes.count) if scopes else None
+
+
+def entity_values(code, period, metrics, basis="quy"):
+    if code == "VNM":
+        values, sources = vinamilk_values(period, metrics, basis)
+        return values, sources, "hợp nhất" if values else None
+    return company_values(code, period, metrics, basis)
+
+
+def _ratios(v):
+    r = {}
+    if v.get("doanh_thu_thuan"):
+        if "loi_nhuan_gop" in v:
+            r["bien_gop"] = v["loi_nhuan_gop"] / v["doanh_thu_thuan"]
+        if "loi_nhuan_sau_thue" in v:
+            r["bien_rong"] = v["loi_nhuan_sau_thue"] / v["doanh_thu_thuan"]
+    if v.get("von_chu_so_huu") and "no_phai_tra" in v:
+        r["no_von"] = v["no_phai_tra"] / v["von_chu_so_huu"]
+    return r
+
+
+def compare(question, companies, with_vinamilk, basis="quy"):
+    """So sánh các doanh nghiệp (có thể gồm Vinamilk) theo kỳ chung: bảng số, tỷ số và nhận xét ai lãi hơn, ai lớn hơn.
+
+    Tới 4 bên thì mỗi bên một cột; nhiều hơn thì mỗi công ty một dòng, xếp theo chỉ tiêu được hỏi."""
+    query = fold(question)
+    codes = (["VNM"] if with_vinamilk else []) + list(companies)
+    asked_metrics = [m for m in METRICS if m in question_metrics(query)]
+    wide = len(codes) <= WIDE_LIMIT
+    metrics = list(dict.fromkeys([*COMPARE_METRICS, *asked_metrics] if wide else [*asked_metrics, *COMPARE_METRICS]))
+    key = asked_metrics[0] if asked_metrics else "loi_nhuan_sau_thue" if matches(query, ("loi nhuan", "lai", "lo")) else "doanh_thu_thuan"
+    requested = requested_periods(question)
+    asked = [p for p in requested if p in PERIODS][:2]
+    if requested and not asked:
+        return result(f"Chưa có báo cáo cho {', '.join(p.replace('FY', 'năm ') for p in requested)}.")
+    data = {}
+
+    def load(period):
+        if period not in data:
+            data[period] = {code: entity_values(code, period, metrics, basis) for code in codes}
+        return data[period]
+
+    def have(period):
+        return [code for code in codes if key in load(period)[code][0]]
+
+    if asked:
+        chosen = asked
+    else:                                                  # không nêu kỳ: lấy kỳ có nhiều bên có số nhất, ưu tiên kỳ mới hơn
+        order = list(reversed(PERIODS))
+        best_period = max(order, key=lambda p: (len(have(p)), -order.index(p)))
+        chosen = [best_period] if len(have(best_period)) >= 2 else []
+    if not chosen:
+        return result(f"Chưa có kỳ nào mà ít nhất hai bên cùng có số {METRICS[key][0].lower()} đã đối chiếu, nên chưa so sánh được. "
+                      "Bạn thử nêu rõ kỳ, ví dụ năm 2025 hoặc Q1/2026.")
+    texts, sources, notes = [], {}, []
+    for period in chosen:
+        entities, missing = [], []                         # (tên, số liệu, phạm vi)
+        for code in codes:
+            values, srcs, scope = load(period)[code]
+            if key in values:
+                entities.append((entity_name(code), values, scope))
+                for s in srcs:
+                    sources[(s.get("doc"), s.get("page"))] = s
+            else:
+                missing.append(entity_name(code))
+                if code != "VNM":
+                    for s in report_sources(code, period)[:1]:
+                        sources[(s["doc"], s["page"])] = s
+        if missing:
+            notes.append(f"Chưa có số đã đối chiếu cho {PERIODS[period]}: {', '.join(missing)}. Mở báo cáo gốc ở phần Nguồn để xem.")
+        if len(entities) < 2:
+            only = f" Hiện chỉ có {entities[0][0]}: {METRICS[key][0].lower()} {fmt_ty(entities[0][1][key])} tỷ đồng." if entities else ""
+            texts.append(f"**{PERIODS[period]}**: chưa đủ hai bên có số đã đối chiếu để so sánh.{only}")
+            continue
+        texts.append(_comparison_text(period, entities, metrics) if wide else _ranking_text(period, entities, metrics, key, query))
+        if len({scope for _, _, scope in entities}) > 1:
+            notes.append("Phạm vi báo cáo khác nhau (hợp nhất, riêng lẻ hoặc theo báo cáo), nên so sánh chỉ mang tính tham khảo.")
+    if not asked:
+        notes.append(f"Câu hỏi không nêu kỳ nên dùng {PERIODS[chosen[0]]}, kỳ có nhiều doanh nghiệp có số đã đối chiếu nhất.")
+    return result("\n\n".join(texts), list(sources.values()), list(dict.fromkeys(notes)))
+
+
+def _ranking_text(period, entities, metrics, key, query):
+    """Nhiều doanh nghiệp: mỗi công ty một dòng, xếp theo chỉ tiêu được hỏi."""
+    columns = [m for m in dict.fromkeys([key, *metrics]) if m != "loi_nhuan_truoc_thue" or m == key][:6]
+    lowest_first = matches(query, ("thap nhat", "nho nhat", "it nhat"))
+    ranked = sorted(entities, key=lambda e: e[1][key], reverse=not lowest_first)
+    label = METRICS[key][0]
+    lines = [f"**So sánh {len(ranked)} doanh nghiệp · {PERIODS[period]}** (tỷ đồng, xếp theo {label.lower()} {'tăng' if lowest_first else 'giảm'} dần)", "",
+             "| # | Doanh nghiệp | " + " | ".join(METRICS[m][0] for m in columns) + " | Biên LN ròng |",
+             "|---:|---|" + "---:|" * (len(columns) + 1)]
+    for i, (name, v, _) in enumerate(ranked, 1):
+        r = _ratios(v)
+        lines.append(f"| {i} | {name} | " + " | ".join(fmt_ty(v[m]) if m in v else "—" for m in columns)
+                     + f" | {_pct(r['bien_rong']) if 'bien_rong' in r else '—'} |")
+    by_value = sorted(entities, key=lambda e: e[1][key])
+    low, high = by_value[0], by_value[-1]
+    notes = ["", "**Nhận xét**", "",
+             f"- **{label} cao nhất:** {high[0]} ({fmt_ty(high[1][key])} tỷ đồng); **thấp nhất:** {low[0]} ({fmt_ty(low[1][key])} tỷ đồng)."]
+    profits = [(n, v["loi_nhuan_sau_thue"]) for n, v, _ in entities if "loi_nhuan_sau_thue" in v]
+    if len(profits) > 1 and key != "loi_nhuan_sau_thue":
+        top = max(profits, key=lambda x: x[1])
+        notes.append(f"- **Lợi nhuận sau thuế cao nhất:** {top[0]} ({fmt_ty(top[1])} tỷ đồng).")
+    losses = [n for n, p in profits if p < 0]
+    if losses:
+        notes.append(f"- **Đang lỗ sau thuế:** {', '.join(losses)}.")
+    margins = [(n, _ratios(v)["bien_rong"]) for n, v, _ in entities if "bien_rong" in _ratios(v)]
+    if len(margins) > 1:
+        top = max(margins, key=lambda x: x[1])
+        notes.append(f"- **Biên lợi nhuận ròng cao nhất:** {top[0]} ({_pct(top[1])}).")
+    return "\n".join(lines + notes)
+
+
+def series(companies, with_vinamilk, metrics, basis="quy"):
+    """Một chỉ tiêu qua các quý: mỗi quý một dòng, mỗi doanh nghiệp một cột."""
+    codes = (["VNM"] if with_vinamilk else []) + list(companies)
+    quarters = [p for p in PERIODS if p.startswith("Q")]
+    texts, sources, empty = [], {}, []
+    for metric in metrics:
+        table = {p: {code: entity_values(code, p, [metric], basis) for code in codes} for p in quarters}
+        shown = [code for code in codes if any(metric in table[p][code][0] for p in quarters)]
+        empty += [entity_name(code) for code in codes if code not in shown]
+        if not shown:
+            continue
+        timing = "" if metric in POINT_METRICS else " (lũy kế)" if basis == "luy_ke" else " (riêng quý)"
+        lines = [f"**{METRICS[metric][0]}{timing} qua các quý** (tỷ đồng)", "",
+                 "| Kỳ | " + " | ".join(entity_name(c) for c in shown) + " |", "|---|" + "---:|" * len(shown)]
+        for p in quarters:
+            if not any(metric in table[p][c][0] for c in shown):
+                continue
+            lines.append(f"| {p} | " + " | ".join(fmt_ty(table[p][c][0][metric]) if metric in table[p][c][0] else "—" for c in shown) + " |")
+            for c in shown:
+                for s in table[p][c][1]:
+                    sources[(s.get("doc"), s.get("page"))] = s
+        texts.append("\n".join(lines))
+    notes = ["Ô có dấu — là kỳ chưa có số đã đối chiếu."] if texts else []
+    if empty:
+        notes.append(f"Chưa có số đã đối chiếu theo quý của: {', '.join(dict.fromkeys(empty))}.")
+    if not texts:
+        return result("Chưa có số đã đối chiếu theo quý cho lựa chọn này.", [], notes)
+    return result("\n\n".join(texts), list(sources.values()), notes)
+
+
+def ratio_answer(companies, period, basis="quy"):
+    """Biên lợi nhuận và mức nợ của từng doanh nghiệp, tính từ số đã đối chiếu; ghi rõ số dùng để tính."""
+    lines = [f"**Chỉ số tài chính · {PERIODS[period]}**", "",
+             "| Doanh nghiệp | Biên lợi nhuận gộp | Biên lợi nhuận ròng | Nợ phải trả / vốn chủ sở hữu |", "|---|---:|---:|---:|"]
+    used, sources, missing = [], {}, []
+    for code in companies:
+        values, srcs, _ = company_values(code, period, COMPARE_METRICS, basis)
+        r = _ratios(values)
+        if not r:
+            missing.append(COMPANIES[code][0])
+            for s in report_sources(code, period)[:1]:
+                sources[(s["doc"], s["page"])] = s
+            continue
+        lines.append(f"| {COMPANIES[code][0]} ({code}) | " + " | ".join(_pct(r[k]) if k in r else "—" for k in ("bien_gop", "bien_rong", "no_von")) + " |")
+        used.append(f"- **{COMPANIES[code][0]}** (tỷ đồng): " + "; ".join(
+            f"{METRICS[m][0].lower()} {fmt_ty(values[m])}" for m in ("doanh_thu_thuan", "loi_nhuan_gop", "loi_nhuan_sau_thue", "no_phai_tra", "von_chu_so_huu") if m in values) + ".")
+        for s in srcs:
+            sources[(s["doc"], s["page"])] = s
+    if not used:
+        return result(f"Chưa đủ số đã đối chiếu của {', '.join(missing)} cho {PERIODS[period]} để tính biên lợi nhuận hay mức nợ. Mở báo cáo gốc ở phần Nguồn để xem.",
+                      list(sources.values()))
+    notes = ["Biên lợi nhuận gộp = lợi nhuận gộp / doanh thu thuần; biên lợi nhuận ròng = lợi nhuận sau thuế / doanh thu thuần."]
+    if missing:
+        notes.append(f"Chưa đủ số đã đối chiếu để tính cho {PERIODS[period]}: {', '.join(missing)}.")
+    return result("\n".join([*lines, "", "**Số dùng để tính**", "", *used]), list(sources.values()), notes)
+
+
+def _comparison_text(period, entities, metrics=COMPARE_METRICS):
+    names = [n for n, _, _ in entities]
+    label = {m: METRICS[m][0] for m in metrics}
+    ratios = {name: _ratios(v) for name, v, _ in entities}
+
+    def best(getter, highest=True):
+        have = [(n, getter(n)) for n in names if getter(n) is not None]
+        return (max if highest else min)(have, key=lambda x: x[1]) if len(have) > 1 else None
+
+    lines = [f"**So sánh {PERIODS[period]}: {', '.join(names[:-1])} và {names[-1]}**", "",
+             "| Chỉ tiêu | " + " | ".join(names) + " | Cao nhất |", "|---|" + "---:|" * len(names) + "---|"]
+    for m in metrics:
+        top = best(lambda n, m=m: dict((e[0], e[1]) for e in entities)[n].get(m))
+        cells = [fmt_ty(v[m]) if m in v else "—" for _, v, _ in entities]
+        lines.append(f"| {label[m]} (tỷ đồng) | " + " | ".join(cells) + f" | {top[0] if top else '—'} |")
+    for key, text, highest in (("bien_gop", "Biên lợi nhuận gộp", True), ("bien_rong", "Biên lợi nhuận ròng", True), ("no_von", "Nợ phải trả / vốn chủ sở hữu", False)):
+        top = best(lambda n, k=key: ratios[n].get(k), highest)
+        cells = [_pct(ratios[n][key]) if key in ratios[n] else "—" for n in names]
+        lines.append(f"| {text} | " + " | ".join(cells) + f" | {top[0] + (' (thấp nhất)' if not highest else '') if top else '—'} |")
+
+    values = {n: v for n, v, _ in entities}
+    notes = ["", "**Nhận xét**", ""]
+    top = best(lambda n: values[n].get("doanh_thu_thuan"))
+    if top:
+        others = sorted(((n, values[n]["doanh_thu_thuan"]) for n in names if n != top[0] and values[n].get("doanh_thu_thuan")), key=lambda x: -x[1])
+        notes.append(f"- **Doanh thu:** {top[0]} cao nhất với {fmt_ty(top[1])} tỷ đồng, " +
+                     "; ".join(f"gấp {_times(top[1], v)} lần {n} ({fmt_ty(v)} tỷ đồng)" for n, v in others) + ".")
+    profits = [(n, values[n]["loi_nhuan_sau_thue"]) for n in names if "loi_nhuan_sau_thue" in values[n]]
+    if profits:
+        status = "; ".join(f"{n} {'lãi' if p > 0 else 'lỗ' if p < 0 else 'hòa vốn'} {fmt_ty(abs(p))} tỷ đồng" for n, p in profits)
+        notes.append(f"- **Lãi, lỗ sau thuế:** {status}.")
+        if len(profits) > 1:
+            top_p = max(profits, key=lambda x: x[1])
+            notes.append(f"- **Lợi nhuận sau thuế cao nhất:** {top_p[0]}.")
+    top_m = best(lambda n: ratios[n].get("bien_rong"))
+    if top_m:
+        notes.append(f"- **Hiệu quả:** biên lợi nhuận ròng cao nhất là {top_m[0]} ({_pct(top_m[1])}); doanh thu lớn hơn chưa chắc lãi trên mỗi đồng doanh thu cao hơn.")
+    top_a = best(lambda n: values[n].get("tong_tai_san"))
+    if top_a:
+        notes.append(f"- **Quy mô tài sản:** {top_a[0]} lớn nhất ({fmt_ty(top_a[1])} tỷ đồng).")
+    low_d = best(lambda n: ratios[n].get("no_von"), highest=False)
+    if low_d:
+        notes.append(f"- **Mức nợ:** {low_d[0]} có tỷ lệ nợ trên vốn chủ thấp nhất ({_pct(low_d[1])}).")
+    return "\n".join(lines + notes)
+
+
 def report_sources(company, period):
     return [repository.source(company, p, "PDF", 1, url, section)
             for p, url, section in repository.documents(company, period)]
@@ -210,8 +486,14 @@ def answer_question(question, companies, selected_period=None, context=None):
         inherited = requested_periods(context) if context else []
         periods = [selected_period or next((p for p in reversed(inherited) if p in PERIODS), None)
                    or latest_period(companies)]
-    if matches(query, ("vinamilk", "vnm")):
-        return result("Bạn có thể tra cứu Vinamilk ở màn hình Tra cứu số liệu. Hỏi riêng các doanh nghiệp khác trong ô chat.")
+    with_vinamilk = matches(query, VNM_WORDS) or asks_all(query)
+    basis = "luy_ke" if matches(query, ("luy ke", "6 thang", "9 thang")) else "quy"
+    if matches(query, SERIES_WORDS) and not requested_periods(question) and not matches(query, ("thuyet minh",)):
+        return series(companies, with_vinamilk, [m for m in METRICS if m in question_metrics(query)] or ["doanh_thu_thuan", "loi_nhuan_sau_thue"], basis)
+    comparing = len(companies) + with_vinamilk >= 2 and matches(query, COMPARE_WORDS)
+    no_period = not requested_periods(question) and not selected_period       # không nêu kỳ: để bảng so sánh tự chọn kỳ cả hai bên cùng có số
+    if with_vinamilk or len(companies) > 2 or (comparing and (no_period or not question_metrics(query))):
+        return compare(question, companies, with_vinamilk, basis)
     if ("MCM" in companies and matches(query, ("bao cao hop nhat", "bctc hop nhat"))) or (
         "QNS" in companies and matches(query, ("bao cao rieng", "bctc rieng", "rieng le"))
     ):
@@ -250,12 +532,15 @@ def answer_for_period(query, companies, period):
         answer = "\n\n".join(f"**{item['source']['doc']} · trang {item['source']['page']}**\n\n{item['text']}" for item in excerpts)
         return result(answer, [item["source"] for item in excerpts], ["Trích đoạn OCR. Đối chiếu báo cáo gốc nếu cần dùng số liệu."])
     metrics = question_metrics(query)
-    if not metrics:
+    if not metrics and not matches(query, RATIO_WORDS):
         return summary(companies, period)
-    if matches(query, ("bien loi nhuan", "ty le", "tang truong", "bao nhieu phan tram", "vi sao", "tai sao",
-                       "cong ty me", "co dong thieu so", "co dong khong kiem soat", "du bao", "du doan")) or "%" in query:
-        return result("Luồng này hỗ trợ tra số tuyệt đối và so sánh hai doanh nghiệp cùng kỳ. Bạn có thể hỏi giá trị của một chỉ tiêu cụ thể.")
     basis = "luy_ke" if matches(query, ("luy ke", "6 thang", "9 thang")) else "quy"
+    if matches(query, RATIO_WORDS):
+        return ratio_answer(companies, period, basis)
+    if matches(query, ("ty le", "tang truong", "bao nhieu phan tram", "vi sao", "tai sao",
+                       "cong ty me", "co dong thieu so", "co dong khong kiem soat", "du bao", "du doan")) or "%" in query:
+        return result("Với các doanh nghiệp ngoài Vinamilk, mình tra được số của từng chỉ tiêu, biên lợi nhuận, mức nợ, số qua các quý và so sánh giữa các doanh nghiệp. "
+                      "Tăng trưởng, nguyên nhân biến động và dự báo thì chưa hỗ trợ. Bạn có thể hỏi, ví dụ: \"doanh thu của KIDO qua các quý\".")
     replies = [lookup(companies, metric, period, basis) for metric in METRICS if metric in metrics]
     sources = {s["url"]: s for reply in replies for s in reply["sources"]}
     notes = list(dict.fromkeys(n for reply in replies for n in reply["notes"]))

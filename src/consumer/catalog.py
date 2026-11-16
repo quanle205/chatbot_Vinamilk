@@ -2,16 +2,16 @@
 from src.rag.text import accent_free, normalize
 
 COMPANIES = {
-    "MCM": ("Mộc Châu Milk", ("moc chau milk", "moc chau")),
-    "QNS": ("Đường Quảng Ngãi", ("duong quang ngai",)),
+    "MCM": ("Mộc Châu Milk", ("moc chau milk", "moc chau", "mc milk")),
+    "QNS": ("Đường Quảng Ngãi", ("duong quang ngai", "quang ngai")),
     "BBC": ("Bibica", ("bibica",)),
     "BHN": ("Habeco", ("habeco", "bia ha noi")),
     "CMF": ("Cholimex Food", ("cholimex food", "cholimex")),
     "KDC": ("KIDO", ("kido",)),
-    "MCH": ("Masan Consumer", ("masan consumer", "hang tieu dung masan")),
-    "PAN": ("Tập đoàn PAN", ("tap doan pan", "pan group")),
+    "MCH": ("Masan Consumer", ("masan consumer", "hang tieu dung masan", "masan")),
+    "PAN": ("Tập đoàn PAN", ("tap doan pan", "pan group", "the pan group")),
     "SAB": ("Sabeco", ("sabeco", "bia sai gon")),
-    "SBT": ("AgriS", ("agris", "thanh thanh cong bien hoa", "ttc agris")),
+    "SBT": ("AgriS", ("agris", "thanh thanh cong bien hoa", "ttc agris", "ttc sugar", "ttc bien hoa")),
     "VCF": ("Vinacafé Biên Hòa", ("vinacafe bien hoa", "vinacafe")),
 }
 METRICS = {
