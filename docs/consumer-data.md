@@ -2,7 +2,8 @@
 
 Danh mục gồm BBC, BHN, CMF, KDC, MCH, MCM, PAN, QNS, SAB, SBT và VCF. Kho nguồn có 99 PDF, bao phủ bốn quý năm 2025 cho cả 11 công ty. Riêng BBC chưa có báo cáo ba quý đầu năm 2026 trong kho. CMF chưa có bảng kết quả kinh doanh Q3/2026. Báo cáo năm của SBT dùng niên độ kết thúc ngày 30/6.
 
-Phần Trò chuyện chỉ trả lời về Vinamilk. Dữ liệu 11 công ty được tra cứu và so sánh cùng kỳ ở màn hình **Tra cứu số liệu** (chọn nhiều doanh nghiệp) và **Xu hướng & so sánh** (`/api/consumer/lookup`, `/api/chart`, `/api/ratios`).
+Gõ tên hoặc mã công ty trực tiếp trong ô chat. Câu hỏi tiếp theo có thể dùng tên và kỳ từ câu hỏi trước. Khi không nêu kỳ, chatbot dùng kỳ mới nhất có báo cáo. Màn hình **Doanh nghiệp** cho phép tra cứu và so sánh cùng kỳ.
+Màn hình **Tra cứu số liệu** (chọn nhiều doanh nghiệp) và **Xu hướng & so sánh** dùng `/api/consumer/lookup`, `/api/chart`, `/api/ratios`.
 
 Với chỉ tiêu đã đối chiếu, chatbot trả về giá trị có đơn vị và nguồn từng trang. Với các tài liệu khác, chatbot tìm dòng hoặc đoạn văn có liên quan trong nội dung đã đọc. Nội dung OCR cần kiểm tra lại ở PDF, đặc biệt khi báo cáo có nhiều cột hoặc dùng đơn vị nghìn đồng. Nếu trang chưa có văn bản hoặc không tìm được dòng phù hợp, chatbot vẫn trả link báo cáo đúng công ty và kỳ.
 
@@ -65,3 +66,12 @@ Trang bị OCR hỏng thường là trang xoay ngang. Chạy lại bằng `pytho
 
 Độ phủ sau khi trích: 5 chỉ số chung (biên gộp, trước thuế, ròng, nợ/vốn chủ, nợ/tổng tài sản) tính được **299/400 (75%)** ô công ty × quý có báo cáo (trước đó khoảng một phần ba).
 Còn thiếu chủ yếu do trang kết quả kinh doanh hoặc cân đối vẫn bị OCR đọc nhiễu (SAB, SBT, PAN Q3/2026, QNS Q3/2025, CMF/VCF một số quý); các ô này hiện "Chưa có số đối chiếu".
+
+## Thử trên chatbot
+
+- Doanh thu thuần riêng Q3/2026 của MCM là bao nhiêu?
+- So sánh doanh thu thuần Q3/2026 của MCM và QNS.
+- Thuyết minh hàng tồn kho của QNS năm 2025.
+- Doanh thu quý hai năm 2025 của Đường Quảng Ngãi.
+- Báo cáo tài chính quý 2/2025 của Cholimex Food.
+- Báo cáo niên độ 2025–2026 của AgriS.

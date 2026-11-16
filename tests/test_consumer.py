@@ -7,9 +7,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import duckdb
 from fastapi.testclient import TestClient
 
-from api.index import ASK_LIMIT, app
+from api.index import ASK_LIMIT, BROWSE_LIMIT, app
 from src.consumer.catalog import COMPANIES, METRICS
-from src.consumer import service
 from src.consumer.repository import DB_PATH
 
 
@@ -34,6 +33,7 @@ def main():
     assert all(source["url"].endswith(f"#page={source['page']}") for source in data["sources"])
     assert "riêng" in data["answer"] and "hợp nhất" in data["answer"]
     assert client.post("/api/consumer/lookup", json={**payload, "companies": ["VNM"], "period": "Q2/2026"}).json()["sources"]
+    BROWSE_LIMIT.reset()
     many = client.post("/api/consumer/lookup", json={"companies": ["VNM", "MCM", "QNS", "KDC"], "period": "Q2/2026", "metric": "doanh_thu_thuan"})
     assert many.status_code == 200, many.text
     text = many.json()["answer"]
@@ -48,17 +48,27 @@ def main():
     profit = client.post("/api/consumer/lookup", json={**payload, "metric": "loi_nhuan_sau_thue"}).json()
     assert "449.769.818.052" in profit["answer"] and any("566.696.672" in n for n in profit["notes"])
 
-    def chat(question, companies, period=None, context=None):          # logic tra cứu doanh nghiệp; trò chuyện không còn gọi tới nó
-        return service.answer_question(question, companies, period, context)
-    comparison = chat("So sánh doanh thu thuần Q3/2026 của MCM và QNS", ["MCM", "QNS"])
+    comparison = client.post("/api/ask", json={"question": "So sánh doanh thu thuần Q3/2026 của MCM và QNS"}).json()
     assert comparison["answer"] == data["answer"]
-    selected = chat("Doanh thu thuần?", ["MCM"], "FY2025")
+    selected = client.post("/api/ask", json={"company": "MCM", "company_period": "FY2025", "question": "Doanh thu thuần?"}).json()
     assert "2.834.874.145.661" in selected["answer"] and len(selected["sources"]) == 1
-    cited = chat("Thuyết minh hàng tồn kho của QNS năm 2025", ["QNS"])
+    cited = client.post("/api/ask", json={"question": "Thuyết minh hàng tồn kho của QNS năm 2025"}).json()
     assert cited["sources"] and all(s["doc"].startswith("QNS · FY2025") for s in cited["sources"])
-    assert not chat("Tổng tài sản Q4/2026 của MCM?", ["MCM"])["sources"]
-    annual = chat("Doanh thu QNS năm 2026?", ["QNS"])
+    missing = client.post("/api/ask", json={"question": "Tổng tài sản Q4/2026 của MCM?"}).json()
+    assert not missing["sources"]
+    default = client.post("/api/ask", json={"question": "Doanh thu của Mộc Châu Milk?\n(Nếu không nêu kỳ, hiểu là kỳ Q2/2026.)"}).json()
+    assert "692.782.561.653" in default["answer"] and "Q3/2026" in default["answer"]
+    follow_up = client.post("/api/ask", json={
+        "question": "Còn lợi nhuận sau thuế?",
+        "history": [{"role": "user", "text": "Doanh thu Q1/2026 của MCM?"}],
+    }).json()
+    assert "80.118.557.404" in follow_up["answer"] and "Q1/2026" in follow_up["answer"]
+    ASK_LIMIT.reset()
+    shorthand = client.post("/api/ask", json={"question": "Doanh thu Q3 của QNS?"}).json()
+    assert "3.073.222.799.902" in shorthand["answer"]
+    annual = client.post("/api/ask", json={"question": "Doanh thu QNS năm 2026?"}).json()
     assert "9.125.345.060.876" in annual["answer"] and "lũy kế" in annual["answer"]
+    BROWSE_LIMIT.reset()
     every = list(COMPANIES) + ["VNM"]
     trend_all = client.post("/api/chart", json={"mode": "series", "companies": every, "metrics": ["doanh_thu_thuan", "loi_nhuan_sau_thue"]})
     assert trend_all.status_code == 200, trend_all.text
@@ -94,6 +104,7 @@ def main():
                 [code, period, metric, code, period, metric]).fetchall()]
     audited = 0
     for period in ("Q1/2025", "Q2/2025", "Q3/2025", "Q4/2025", "Q1/2026", "Q2/2026", "Q3/2026", "FY2025"):
+        BROWSE_LIMIT.reset()
         for column in client.post("/api/ratios", json={"companies": list(COMPANIES), "period": period}).json()["comparison"]:
             for item in (i for g in column["groups"] for i in g["items"] if i.get("value") is not None):
                 num, den = (raw(column["company"], period, m) for m in definitions[item["name"]])
@@ -101,12 +112,6 @@ def main():
                 assert abs(num[0] / den[0] - item["value"]) < 1e-9, (column["company"], period, item["name"])
                 audited += 1
     assert audited >= 100, audited
-    ASK_LIMIT.reset()
-    for q in ["So sánh doanh thu thuần Q3/2026 của MCM và QNS", "Doanh thu quý hai năm 2025 của Đường Quảng Ngãi?",
-              "Doanh thu Vinamilk và MCM Q2/2026 chênh bao nhiêu?"]:
-        reply = client.post("/api/ask", json={"question": q}).json()      # trò chuyện chỉ có Vinamilk: từ chối, không số liệu, không nguồn
-        assert "chỉ trả lời về báo cáo tài chính hợp nhất của Vinamilk" in reply["answer"] and not reply["sources"], q
-        assert not any(ch.isdigit() for ch in reply["answer"]), reply["answer"]
     assert client.get("/api/consumer/catalog").json()["companies"] == {
         "VNM": "Vinamilk", **{code: company[0] for code, company in COMPANIES.items()}
     }
@@ -133,14 +138,24 @@ def main():
     ratios = client.post("/api/ratios", json={"company": "QNS", "period": "Q3/2026"}).json()
     margin = ratios["groups"][0]["items"][0]
     assert margin["value"] > 0 and margin["sources"]
-    for code, (name, _) in COMPANIES.items():
-        reply = chat(f"Báo cáo tài chính Q2/2025 của {name}?", [code])
-        assert reply["sources"] and all(s["doc"].startswith(f"{code} · Q2/2025") for s in reply["sources"]), code
-    business = chat("Doanh thu và lợi nhuận sau thuế Q2/2026 của KIDO?", ["KDC"])
+    ASK_LIMIT.reset()
+    business = client.post("/api/ask", json={
+        "question": "Doanh thu và lợi nhuận sau thuế Q2/2026 của KIDO?"
+    }).json()
     assert "1.863.834.355.125" in business["answer"] and "9.540.055.382" in business["answer"]
     assert len(business["sources"]) == 1 and business["sources"][0]["page"] == 9
-    actual = chat("Doanh thu quý hai năm 2025 của Đường Quảng Ngãi?", ["QNS"])
-    assert "2.955.781.100.115" in actual["answer"] and actual["sources"][0]["page"] == 4
+    actual = client.post("/api/ask", json={"question": "Doanh thu quý hai năm 2025 của Đường Quảng Ngãi?"}).json()
+    assert "2.955.781.100.115" in actual["answer"]
+    assert actual["sources"][0]["page"] == 4
+    for code, (name, _) in COMPANIES.items():
+        ASK_LIMIT.reset()
+        reply = client.post("/api/ask", json={"question": f"Báo cáo tài chính Q2/2025 của {name}?"})
+        assert reply.status_code == 200, reply.text
+        sources = reply.json()["sources"]
+        assert sources and all(s["doc"].startswith(f"{code} · Q2/2025") for s in sources), reply.text
+    from src.consumer.service import question_companies
+    assert question_companies("tài chính quý 1 năm 2025 của công ty habenco") == ["BHN"]      # gõ sai tên vẫn nhận ra
+    assert question_companies("Vinamilk doanh thu quý 2/2025") == []                          # không nhận nhầm công ty khác
     print("PASS: nhận diện 11 công ty, nguồn của 99 PDF, tra cứu, so sánh, dòng tiền và thuyết minh.")
 
 
