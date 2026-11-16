@@ -1,0 +1,123 @@
+[
+  {
+    "company_code": "MCM",
+    "source_url": "https://mcmilk.com.vn/wp-content/uploads/2026/03/20260318-MCM-Bao-cao-tai-chinh-kiem-toan-2025-signed.pdf",
+    "file": "MCM - Moc Chau Milk/MCM-2025-audited.pdf",
+    "status": "downloaded",
+    "period_end": "2025-12-31",
+    "pages": 39,
+    "size_bytes": 10901742,
+    "folder": "MCM - Moc Chau Milk"
+  },
+  {
+    "company_code": "QNS",
+    "source_url": "https://qns.com.vn/upload/product/vi-2025-skt-bc-hop-nhat-full-1772104459.pdf",
+    "file": "QNS - Duong Quang Ngai/QNS-2025-audited.pdf",
+    "status": "downloaded",
+    "period_end": "2025-12-31",
+    "pages": 42,
+    "size_bytes": 4777113,
+    "folder": "QNS - Duong Quang Ngai"
+  },
+  {
+    "company_code": "MCH",
+    "source_url": "https://static2.vietstock.vn/vietstock/2026/3/24/20260322___mch___2025_annual_report.pdf",
+    "file": "MCH - Masan Consumer/MCH-2025-annual-report.pdf",
+    "status": "downloaded",
+    "period_end": "2025-12-31",
+    "pages": 143,
+    "size_bytes": 14835217,
+    "folder": "MCH - Masan Consumer"
+  },
+  {
+    "company_code": "KDC",
+    "source_url": "https://www.kdc.vn/files/documents/20260420_KDC_AR2025_VN.pdf",
+    "file": "KDC - KIDO/KDC-2025-annual-report.pdf",
+    "status": "downloaded",
+    "period_end": "2025-12-31",
+    "pages": 114,
+    "size_bytes": 22323676,
+    "folder": "KDC - KIDO"
+  },
+  {
+    "company_code": "BBC",
+    "source_url": "https://drive.google.com/uc?export=download&id=14KBARKOM65VPl3nq5geinOvL7PyeCnTH",
+    "file": "BBC - Bibica/BBC-2025-audited.pdf",
+    "status": "downloaded",
+    "period_end": "2025-12-31",
+    "pages": 42,
+    "size_bytes": 12945636,
+    "folder": "BBC - Bibica"
+  },
+  {
+    "company_code": "VCF",
+    "source_url": "https://static2.vietstock.vn/vietstock/2026/3/2/20260302___vcf___bctc_kiem_toan_nam_2025.pdf",
+    "file": "VCF - Vinacafe Bien Hoa/VCF-2025-audited.pdf",
+    "status": "downloaded",
+    "period_end": "2025-12-31",
+    "pages": 40,
+    "size_bytes": 9762491,
+    "folder": "VCF - Vinacafe Bien Hoa"
+  },
+  {
+    "company_code": "CMF",
+    "source_url": "https://cholimexfood.com.vn/wp-content/uploads/2026/20260317_CBTT/20260317%20-%20BCTC%20DDKT%20NAM%202025%20-%20SIGNED.pdf",
+    "file": "CMF - Cholimex Food/CMF-2025-audited.pdf",
+    "status": "downloaded",
+    "period_end": "2025-12-31",
+    "pages": 30,
+    "size_bytes": 10296425,
+    "folder": "CMF - Cholimex Food"
+  },
+  {
+    "company_code": "SAB",
+    "source_url": "https://www.sabeco.com.vn/Data/Sites/1/media/co%20dong/bao%20cao%20tai%20chinh/2026/2026-03-26/2025FS-CONSO-VN.pdf",
+    "file": "SAB - Sabeco/SAB-2025-audited.pdf",
+    "status": "downloaded",
+    "period_end": "2025-12-31",
+    "pages": 74,
+    "size_bytes": 20625419,
+    "folder": "SAB - Sabeco"
+  },
+  {
+    "company_code": "BHN",
+    "source_url": "https://www.habeco.com.vn/file/1eb5f61f-e4c4-4107-9b96-1e54a67f5059",
+    "file": "BHN - Habeco/BHN-2025-audited.pdf",
+    "status": "downloaded",
+    "period_end": "2025-12-31",
+    "pages": 50,
+    "size_bytes": 8926267,
+    "folder": "BHN - Habeco"
+  },
+  {
+    "company_code": "SBT",
+    "source_url": "https://www.ttcagris.com.vn/media/Quan%20he%20nha%20dau%20tu/20260928%20-%20SBT%20-%20B%C3%A1o%20c%C3%A1o%20t%C3%A0i%20ch%C3%ADnh%20h%E1%BB%A3p%20nh%E1%BA%A5t%20ki%E1%BB%83m%20to%C3%A1n%20Ni%C3%AAn%20%C4%91%E1%BB%99%202025-2026.pdf",
+    "file": "SBT - AgriS/SBT-2025-2026-audited.pdf",
+    "status": "downloaded",
+    "period_end": "2026-06-30",
+    "pages": 85,
+    "size_bytes": 7572529,
+    "folder": "SBT - AgriS"
+  },
+  {
+    "company_code": "PAN",
+    "file": "PAN - Tap doan PAN (du phong)/PAN-2025-audited.pdf",
+    "period_end": "2025-12-31",
+    "source_url": "https://storage.thepangroup.vn/Data/2026/03/31/20260331-pan-bctc-hop-nhat-2025-da-kiem-toan-signed-639105561349976581.pdf",
+    "status": "downloaded",
+    "role": "candidate_replacement_for_BBC",
+    "pages": 65,
+    "size_bytes": 15245443,
+    "folder": "PAN - Tap doan PAN (du phong)"
+  },
+  {
+    "company_code": "SBT",
+    "file": "SBT - AgriS/SBT-2024-2025-audited.pdf",
+    "period_end": "2025-06-30",
+    "source_url": "https://www.ttcagris.com.vn/media/20250927%20-%20SBT%20-%20BCTC%20hop%20nhat%20-%20FY%20-%202024-2025.pdf",
+    "status": "downloaded",
+    "pages": 80,
+    "size_bytes": 10157076,
+    "folder": "SBT - AgriS"
+  }
+]

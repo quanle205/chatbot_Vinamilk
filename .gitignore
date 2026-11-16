@@ -1,12 +1,15 @@
-﻿__pycache__/
+__pycache__/
 *.pyc
 .venv/
 .env
 .streamlit/secrets.toml
 *.json.key
-# Dữ liệu trung gian và bản PDF gốc (21 MB) không cần cho ứng dụng; chạy lại pipeline để tạo.
-data/raw/
-data/interim/
+# Dữ liệu nguồn của 11 công ty (PDF gốc) và OCR trung gian được lưu trong git để mọi người dựng lại DuckDB không phải tải/OCR lại.
+# Không lưu: thư viện Python cài tạm (consumer-deps), log và tệp tạm của bước OCR.
+data/interim/*
+!data/interim/consumer/
+*.log
+*.tmp
 # Báo cáo môn học
 *.docx
 .claude/
