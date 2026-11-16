@@ -6,8 +6,8 @@ tăng trưởng, vẽ xu hướng. Số liệu lấy từ PDF bằng OCR, đã �
 
 | Thư mục | Nội dung |
 |---|---|
-| data/raw | PDF BCTC hợp nhất q1-2025 ... q2-2026 (không đưa lên git) |
-| data/interim | kết quả OCR và parse trung gian (không đưa lên git) |
+| data/raw | PDF BCTC hợp nhất q1-2025 ... q2-2026 của Vinamilk (không đưa lên git); `data/raw/consumer/`: 99 PDF của 11 công ty hàng tiêu dùng và danh mục nguồn `sources*.json` (có trong git, ~740 MB) |
+| data/interim | kết quả OCR và parse trung gian của Vinamilk (không đưa lên git); `data/interim/consumer/`: OCR từng trang của 11 công ty (có trong git, ~115 MB) |
 | data/processed | `financials.duckdb`, `chunks.jsonl`, `overrides.csv` (số đã đối chiếu tay với PDF) |
 | src/ingest | pipeline dữ liệu: `preprocess.py` (PDF -> OCR), `parse_statements.py`, `repair_identities.py`, `build_db.py` |
 | src/rag | `chunking.py`, truy xuất BM25 + mở rộng truy vấn theo biệt danh chỉ tiêu (`retriever.py`); nhánh vector n-gam chỉ giữ để đối chứng (đo: kém BM25, trọng số 0) |
