@@ -18,7 +18,24 @@ function loadChartJs() {
 }
 const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
+const PALETTE = ["#0072B2", "#E69F00", "#009E73", "#D55E00", "#CC79A7", "#56B4E9", "#6A3D9A", "#7F7F7F", "#2E7D32", "#B71C1C", "#00838F", "#8D6E00"];   // 12 màu phân biệt được, cho 12 doanh nghiệp
+
+// Nhiều doanh nghiệp: hàng = doanh nghiệp, cột = kỳ; nguồn của từng doanh nghiệp xếp trong một mục thu gọn.
+function matrixEl(b) {
+  const cols = b.columns || [];
+  const cell = c => (c.value == null ? "–" : vn(c.value / b.scale));
+  return h("div", { class: "tbl" }, h("table", {},
+    h("thead", {}, h("tr", {}, [["Doanh nghiệp", false], ...cols.map(c => [`${c} (${b.unit})`, true]), ...(b.growth ? [["Thay đổi", true]] : []), ["Nguồn", false]]
+      .map(([t, n]) => h("th", { class: n ? "n" : null, scope: "col", text: t })))),
+    h("tbody", {}, b.rows.map(r => h("tr", {},
+      h("td", { text: r.scope ? `${r.label} · ${r.scope}` : r.label }),
+      r.cells.map(c => h("td", { class: "n", text: cell(c) })),
+      b.growth ? h("td", { class: "n", text: r.change == null ? "–" : signed(r.change / b.scale) + (r.growth != null ? ` (${signed(r.growth * 100)}%)` : "") }) : null,
+      h("td", {}, r.sources.length ? h("details", { class: "pgd" }, h("summary", { text: `${r.sources.length} nguồn` }), r.sources.map(sourceActionsEl)) : "Chưa có số"))))));
+}
+
 function tableEl(b) {
+  if (b.kind === "matrix") return matrixEl(b);
   const kind = b.kind, unit = b.unit;
   const withSources = kind === "series" || kind === "companies" || b.rows.some(r => r.source?.url);
   const head = [kind === "companies" ? "Doanh nghiệp" : kind === "breakdown" ? "Khoản mục" : "Kỳ",
@@ -45,13 +62,24 @@ function summaryEl(b) {                           // một dòng nhận xét do 
 }
 
 function drawChart(box, b, before) {
-  const holder = h("div", { class: "cv" });
-  const canvas = h("canvas", { role: "img", "aria-label": `Biểu đồ ${b.title}: ` + b.rows.filter(r => r.value != null).map(r => `${r.label} ${vn(r.value / b.scale)} ${b.unit}`).join("; ") });
+  const holder = h("div", { class: "cv" + (b.kind === "matrix" ? " cv-tall" : "") });
+  const canvas = h("canvas", { role: "img", "aria-label": `Biểu đồ ${b.title}: ` + (b.kind === "matrix" ? `${b.rows.length} doanh nghiệp qua ${b.columns.length} kỳ, số liệu ở bảng bên dưới` : b.rows.filter(r => r.value != null).map(r => `${r.label} ${vn(r.value / b.scale)} ${b.unit}`).join("; ")) });
   holder.append(canvas); box.insertBefore(holder, before);
   loadChartJs().then(Chart => {
     const ink = cssVar("--accent"), mute = cssVar("--mute"), line = cssVar("--line");
     Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;            // cùng phông với trang, không dùng phông mặc định của Chart.js
-    const compare = b.kind === "companies";
+    const compare = b.kind === "companies", multi = b.kind === "matrix";
+    if (multi) {
+      new Chart(canvas, { type: "line",
+        data: { labels: b.columns, datasets: b.rows.map((r, i) => ({ label: r.label, data: r.cells.map(c => (c.value == null ? null : c.value / b.scale)),
+          borderColor: PALETTE[i % PALETTE.length], backgroundColor: PALETTE[i % PALETTE.length], pointRadius: 3, pointHoverRadius: 5, borderWidth: 2, tension: 0, spanGaps: false, series: true })) },
+        options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: "nearest", intersect: true },
+          plugins: { legend: { display: true, position: "bottom", labels: { color: mute, boxWidth: 12, usePointStyle: true } },
+                     tooltip: { callbacks: { label: c => `${c.dataset.label}: ${vn(c.parsed.y)} ${b.unit}` } } },
+          scales: { x: { ticks: { color: mute }, grid: { display: false } },
+                    y: { ticks: { color: mute, callback: v => vn(v, 0) }, grid: { color: line }, title: { display: true, text: b.unit, color: mute } } } } });
+      return;
+    }
     new Chart(canvas, { type: compare ? "bar" : "line",
       data: { labels: b.rows.map(r => compare ? r.label : r.period || r.label), datasets: [{ label: b.unit, data: b.rows.map(r => r.value == null ? null : r.value / b.scale),
         borderColor: ink, backgroundColor: ink, pointRadius: 4, pointHoverRadius: 6, borderWidth: 2, tension: 0 }] },      // tension 0: đường thẳng, không vẽ đoạn cong sai lệch số liệu
@@ -66,7 +94,7 @@ export function chartsEl(blocks) {
   if (!blocks || !blocks.length) return null;
   return h("div", { class: "charts" }, blocks.map(b => {
     const table = tableEl(b), box = h("div", { class: "chartbox" }, h("h3", { text: b.title }), summaryEl(b), table);
-    if (b.chart && b.rows.length >= 2) drawChart(box, b, table);
+    if (b.chart && (b.kind === "matrix" || b.rows.length >= 2)) drawChart(box, b, table);
     return box;
   }));
 }
@@ -76,6 +104,7 @@ window.addEventListener("themechange", () => {
   if (!window.Chart) return;
   Object.values(window.Chart.instances).forEach(chart => {
     chart.data.datasets.forEach(dataset => {
+      if (dataset.series) return;                                  // nhiều doanh nghiệp: giữ màu riêng từng đường
       dataset.borderColor = cssVar("--accent");
       dataset.backgroundColor = cssVar("--accent");
     });

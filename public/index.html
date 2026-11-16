@@ -124,12 +124,15 @@
     <section class="view" id="view-trends" aria-label="Xu Hướng và So Sánh" hidden>
       <div class="scroll"><div class="col">
         <h2 class="page-title">Xu hướng &amp; so sánh</h2>
-        <p class="muted">Theo dõi một doanh nghiệp qua nhiều quý hoặc so sánh nhiều doanh nghiệp cùng kỳ.</p>
+        <p class="muted">Theo dõi nhiều doanh nghiệp qua các quý trên cùng một biểu đồ, so sánh hai kỳ hoặc so sánh các doanh nghiệp cùng kỳ. Mặc định chọn đủ 12 doanh nghiệp.</p>
         <form class="form-row" id="chart-form">
-          <label>Doanh nghiệp<select id="c-company" disabled><option value="VNM">Vinamilk</option></select></label>
+          <fieldset class="company-set" id="c-companies" disabled>
+            <legend>Doanh nghiệp <span id="c-count" class="muted"></span></legend>
+            <div class="company-actions"><button type="button" class="btn" id="c-all">Chọn tất cả</button><button type="button" class="btn" id="c-none">Bỏ chọn tất cả</button></div>
+            <div class="company-grid" id="c-grid"><label><input type="checkbox" value="VNM" checked> Vinamilk (VNM)</label></div>
+          </fieldset>
           <label>Kiểu
-            <select id="c-mode"><option value="series" selected>Xu hướng theo quý</option><option value="growth">So sánh hai kỳ</option><option value="companies">So sánh doanh nghiệp</option><option value="explain">Phân rã biến động</option></select></label>
-          <details id="c-peers" class="company-picker" hidden><summary>Chọn thêm doanh nghiệp</summary><div class="company-options"></div></details>
+            <select id="c-mode"><option value="series" selected>Xu hướng theo quý</option><option value="growth">So sánh hai kỳ</option><option value="companies">So sánh doanh nghiệp cùng kỳ</option><option value="explain">Phân rã biến động (Vinamilk)</option></select></label>
           <label>Chỉ tiêu<select id="c-m1"></select></label>
           <label>Chỉ tiêu thêm<select id="c-m2"></select></label>
           <label>Chỉ tiêu thêm<select id="c-m3"></select></label>

@@ -22,6 +22,8 @@ tăng trưởng, vẽ xu hướng. Số liệu lấy từ PDF bằng OCR, đã �
 
 ## Tính năng
 
+- **Xu hướng & so sánh (nhiều doanh nghiệp):** danh sách 12 doanh nghiệp luôn hiện và mặc định chọn đủ (có nút Chọn/Bỏ chọn tất cả). Xu hướng theo quý vẽ các doanh nghiệp trên cùng một biểu đồ nhiều đường kèm bảng doanh nghiệp × kỳ; "So sánh hai kỳ" cho thay đổi tuyệt đối và % của từng doanh nghiệp;
+  "So sánh cùng kỳ" vẽ cột. Doanh nghiệp chưa có báo cáo kỳ đó hiện "Chưa có số" thay vì làm hỏng cả bảng. Kỳ mặc định là kỳ có nhiều doanh nghiệp nhất. Chọn riêng Vinamilk thì dùng danh mục chỉ tiêu đầy đủ và có "Phân rã biến động".
 - **Tra cứu số liệu (nhiều doanh nghiệp):** chọn Vinamilk hoặc bất kỳ trong 11 công ty hàng tiêu dùng, thêm các doanh nghiệp khác để so sánh cùng kỳ, chọn chỉ tiêu và kỳ. Số liệu có nguồn trang khi đã đối chiếu được chỉ tiêu. Dùng mục này (không phải Trò chuyện) để tra cứu và so sánh các công ty. **Phần Trò chuyện chỉ có dữ liệu Vinamilk**; hỏi về công ty khác trong Trò chuyện sẽ được hướng dẫn sang mục Doanh nghiệp. Xem [hướng dẫn nhập dữ liệu](docs/consumer-data.md).
 
 - **Hỏi đáp có dẫn chứng:** câu trả lời kèm nguồn (báo cáo, trang PDF, ảnh trang có khung đánh dấu dòng) và cảnh báo số không khớp.

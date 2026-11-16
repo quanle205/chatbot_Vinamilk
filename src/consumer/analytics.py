@@ -50,11 +50,40 @@ def chart(companies, metrics, mode, period, basis, kind, analyst):
                 "source": record[1][0] if record and record[1] else None,
                 "scope": record[2] if record else None}
 
+    def matrix(metric, name):
+        """Nhiều doanh nghiệp cùng một chỉ tiêu: hàng = doanh nghiệp, cột = kỳ (xu hướng theo quý hoặc hai kỳ so sánh)."""
+        if mode == "series":
+            quarters = [p for p in catalog.PERIODS if p.startswith("Q")]
+            reported = [quarters.index(p) for c in companies for p in periods(c, analyst) if p in quarters]
+            columns = quarters[min(reported):max(reported) + 1] if reported else []
+        else:
+            selected = Period.parse(period)
+            columns = [str(selected.prev() if kind == "qoq" else selected.minus_year()), period]
+        rows = []
+        for company in companies:
+            cells = [row(company, p, metric, p) for p in columns]
+            sources = list({(src["url"], src.get("page")): src for cell in cells for src in cell["sources"]}.values())
+            scopes = sorted({cell["scope"] for cell in cells if cell["scope"]})
+            item = {"label": f"{COMPANIES[company]} ({company})", "cells": cells, "sources": sources, "scope": ", ".join(scopes)}
+            if (mode == "growth" and all(cell["value"] is not None for cell in cells)
+                    and cells[0]["scope"] == cells[1]["scope"] and cells[0]["scope"] != "theo báo cáo"):
+                prior, current = (cell["value"] for cell in cells)
+                item["change"] = current - prior
+                item["growth"] = (current - prior) / abs(prior) if prior else None
+            rows.append(item)
+        title = f"{name} · " + ("xu hướng theo quý" if mode == "series" else f"{columns[0]} so với {columns[1]}")
+        return {"kind": "matrix", "title": title, "unit": "tỷ đồng", "scale": 1e9, "columns": columns, "rows": rows,
+                "growth": mode == "growth",
+                "chart": mode == "series" and any(sum(c["value"] is not None for c in r["cells"]) >= 2 for r in rows)}
+
     blocks = []
     for metric in metrics:
         name = catalog.METRICS[metric][0]
         if metric not in {"tong_tai_san", "no_phai_tra", "von_chu_so_huu", "hang_ton_kho"} and not (period or "").startswith("FY"):
             name += " (lũy kế)" if basis == "luy_ke" else " (riêng quý)"
+        if len(companies) > 1 and mode in {"series", "growth"}:
+            blocks.append(matrix(metric, name))
+            continue
         if mode == "companies":
             rows = [row(c, period, metric, f"{COMPANIES[c]} ({c})") for c in companies]
             blocks.append({"kind": "companies", "title": f"{name} · {catalog.PERIODS.get(period, period)}",

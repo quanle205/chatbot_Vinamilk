@@ -37,9 +37,9 @@ async function contrast(page) {
     await page.waitForFunction(()=>document.getElementById('lk-out').textContent.includes('16.') || document.getElementById('lk-out').textContent.includes('đồng'));
     assert.deepEqual(await contrast(page),[],`${theme}: lookup contrast`);
     await page.locator('[data-view="trends"]').click();
-    await page.locator('#chart-form button').click(); await page.locator('.tbl').first().waitFor();
+    await page.locator('#chart-form button[type=submit]').click(); await page.locator('.tbl').first().waitFor();
     await page.waitForFunction(()=>window.Chart && Object.keys(window.Chart.instances).length>0);
-    assert.equal(await page.locator('.tbl tbody tr').count(),6);
+    assert.equal(await page.locator('.tbl tbody tr').count(),12);      // mặc định đủ 12 doanh nghiệp
     assert.deepEqual(await contrast(page),[],`${theme}: trends contrast`);
     await page.locator('#theme-toggle').click();
     assert.equal(await page.locator('html').getAttribute('data-theme'),theme==='dark'?'light':'dark');

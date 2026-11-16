@@ -172,6 +172,7 @@
   .chartbox h3 { margin:0 0 4px; font-size:var(--fs-base); }
   .note { font-size:var(--fs-sm); color:var(--mute); margin:4px 0 6px; }
   .cv { position:relative; height:240px; margin:6px 0; }
+  .cv-tall { height:380px; }
 
   .srcs { margin-top:10px; border:1px solid var(--line); border-radius:14px; background:var(--card); font-size:var(--fs-sm); }
   .srcs > summary { cursor:pointer; padding:8px 14px; display:flex; align-items:center; gap:8px; color:var(--mute); list-style:none; border-radius:14px; }
@@ -314,3 +315,8 @@
   .form-row input, .form-row select, .form-row option { color:var(--ink); background:var(--bg); }
   a { color:var(--focus); }
   ::selection { background:var(--accent); color:var(--accent-ink); }
+  .company-set { flex:1 1 100%; min-width:0; margin:0; padding:8px 12px 10px; border:1px solid var(--line); border-radius:12px; }
+  .company-set legend { padding:0 6px; font-size:var(--fs-sm); color:var(--mute); }
+  .company-actions { display:flex; gap:8px; margin-bottom:8px; }
+  .company-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:4px 12px; }
+  .form-row .company-grid label { flex-direction:row; align-items:center; gap:8px; color:var(--ink); font-size:var(--fs-sm); }

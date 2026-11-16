@@ -171,10 +171,10 @@ def chart(body: ChartBody, request: Request):
             raise HTTPException(422, "Kiểu phân tích hoặc chỉ tiêu chưa được hỗ trợ cho lựa chọn này.")
         if body.mode == "companies" and len(companies) < 2:
             raise HTTPException(422, "Chọn ít nhất hai doanh nghiệp để so sánh.")
-        if body.mode != "series" and (not body.period or not all(
+        if body.mode != "series" and (not body.period or not any(
             body.period in analytics.periods(code, analyst()) for code in companies
-        )):
-            raise HTTPException(422, "Chọn kỳ có báo cáo của các doanh nghiệp.")
+        )):                                                      # doanh nghiệp thiếu kỳ này hiện "Chưa có số", không chặn cả bảng
+            raise HTTPException(422, "Chọn kỳ có báo cáo của ít nhất một doanh nghiệp đã chọn.")
         if body.mode == "growth" and (not body.period.startswith("Q") or
                                       (body.kind == "qoq" and body.basis == "luy_ke")):
             raise HTTPException(422, "Chọn kỳ quý và cơ sở so sánh phù hợp.")

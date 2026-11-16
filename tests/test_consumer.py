@@ -59,6 +59,21 @@ def main():
     assert not chat("Tổng tài sản Q4/2026 của MCM?", ["MCM"])["sources"]
     annual = chat("Doanh thu QNS năm 2026?", ["QNS"])
     assert "9.125.345.060.876" in annual["answer"] and "lũy kế" in annual["answer"]
+    every = list(COMPANIES) + ["VNM"]
+    trend_all = client.post("/api/chart", json={"mode": "series", "companies": every, "metrics": ["doanh_thu_thuan", "loi_nhuan_sau_thue"]})
+    assert trend_all.status_code == 200, trend_all.text
+    blocks = trend_all.json()["charts"]
+    assert len(blocks) == 2 and all(b["kind"] == "matrix" and b["chart"] and len(b["rows"]) == 12 for b in blocks)      # mỗi chỉ tiêu một biểu đồ, đủ 12 doanh nghiệp
+    assert blocks[0]["columns"] == ["Q1/2025", "Q2/2025", "Q3/2025", "Q4/2025", "Q1/2026", "Q2/2026", "Q3/2026"]
+    assert all(len(r["cells"]) == 7 for r in blocks[0]["rows"])
+    vnm = next(r for r in blocks[0]["rows"] if r["label"].endswith("(VNM)"))
+    assert vnm["cells"][5]["value"] == 18847347464988 and vnm["cells"][6]["value"] is None and vnm["sources"]
+    growth_all = client.post("/api/chart", json={"mode": "growth", "companies": every, "metrics": ["doanh_thu_thuan"], "period": "Q2/2026", "kind": "yoy"}).json()["charts"][0]
+    assert growth_all["growth"] and len(growth_all["rows"]) == 12 and growth_all["columns"] == ["Q2/2025", "Q2/2026"]
+    assert sum(r.get("growth") is not None for r in growth_all["rows"]) >= 2
+    wide = client.post("/api/chart", json={"mode": "companies", "companies": every, "metrics": ["doanh_thu_thuan"], "period": "Q2/2026"}).json()["charts"][0]
+    assert len(wide["rows"]) == 12 and sum(r["value"] is not None for r in wide["rows"]) >= 4      # thiếu kỳ thì hiện "Chưa có số", không chặn cả bảng
+    assert client.post("/api/chart", json={"mode": "series", "companies": ["VNM"], "metrics": ["Doanh thu thuần"]}).json()["charts"][0]["kind"] == "series"
     ASK_LIMIT.reset()
     for q in ["So sánh doanh thu thuần Q3/2026 của MCM và QNS", "Doanh thu quý hai năm 2025 của Đường Quảng Ngãi?",
               "Doanh thu Vinamilk và MCM Q2/2026 chênh bao nhiêu?"]:
