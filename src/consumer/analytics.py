@@ -8,6 +8,7 @@ LEGACY_METRICS = {"dong_tien_kinh_doanh": "luu_chuyen_hdkd", "dong_tien_dau_tu":
                   "dong_tien_tai_chinh": "luu_chuyen_tai_chinh"}
 RATIOS = (
     ("Sinh lời", "Biên lợi nhuận gộp", "loi_nhuan_gop", "doanh_thu_thuan", "%"),
+    ("Sinh lời", "Biên lợi nhuận trước thuế", "loi_nhuan_truoc_thue", "doanh_thu_thuan", "%"),
     ("Sinh lời", "Biên lợi nhuận ròng", "loi_nhuan_sau_thue", "doanh_thu_thuan", "%"),
     ("Đòn bẩy", "Hệ số nợ trên vốn chủ sở hữu", "no_phai_tra", "von_chu_so_huu", "lần"),
     ("Đòn bẩy", "Hệ số nợ trên tổng tài sản", "no_phai_tra", "tong_tai_san", "%"),

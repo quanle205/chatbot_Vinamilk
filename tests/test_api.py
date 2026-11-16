@@ -250,7 +250,7 @@ def test_ratios_endpoint_matches_ratio_tool_with_delta_history_and_sources():
     assert d["period"] == "Q2/2026" and d["compare_period"] == "Q1/2026" and d["compare_label"] == "quý liền trước"
     assert [g["name"] for g in d["groups"]] == ["Sinh lời", "Chi phí", "Thanh khoản", "Đòn bẩy", "Hoạt động"]
     items = {i["key"]: i for g in d["groups"] for i in g["items"]}
-    assert len(items) == 14 and all(i["value"] is not None for i in items.values())
+    assert len(items) == 15 and all(i["value"] is not None for i in items.values())
     tool = api.call_tool("get_ratio", {"ratio": "biên lợi nhuận gộp", "period": "Q2/2026"})
     gm = items["bien_loi_nhuan_gop"]
     assert gm["value"] == tool["value"] and gm["unit"] == "%" and [h["period"] for h in gm["history"]][0] == "Q1/2025" and len(gm["history"]) == 6

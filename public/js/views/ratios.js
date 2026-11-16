@@ -54,8 +54,8 @@ function card(item, data) {
   return h("div", { class: "ratio-card" }, head, delta, annual, more);
 }
 
-const COMPARE_NOTE = "Số liệu từ báo cáo đã đối chiếu. Vinamilk có 14 chỉ số; các doanh nghiệp khác chỉ tính được 4 chỉ số có đủ số liệu đầu vào cùng phạm vi (ROE, ROA, vòng quay tồn kho... cần số dư đầu kỳ hoặc giá vốn nên không tính để tránh so sánh sai). "
-  + "Dấu – nghĩa là chỉ số không tính được cho doanh nghiệp đó.";
+const COMPARE_NOTE = "Số liệu từ báo cáo đã đối chiếu. Vinamilk có 15 chỉ số; các doanh nghiệp khác chỉ tính được 5 chỉ số có đủ số liệu đầu vào cùng phạm vi (ROE, ROA, vòng quay tồn kho... cần số dư đầu kỳ hoặc giá vốn nên không tính để tránh so sánh sai). "
+  + "Dấu – nghĩa là chỉ số không tính được cho doanh nghiệp đó; \"Chưa có số đối chiếu\" nghĩa là báo cáo có nhưng các chỉ tiêu đầu vào chưa được đối chiếu từ PDF.";
 
 function comparison(data) {
   const catalog = getCatalog();

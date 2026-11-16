@@ -9,7 +9,7 @@ from .tools.facts import Period
 
 # (nhóm, [mã tỷ số]) theo thứ tự hiển thị; mã khớp `_build_ratios` trong tools/analyst.py
 GROUPS = [
-    ("Sinh lời", ["bien_loi_nhuan_gop", "bien_loi_nhuan_hdkd", "bien_loi_nhuan_rong", "roe", "roa"]),
+    ("Sinh lời", ["bien_loi_nhuan_gop", "bien_loi_nhuan_hdkd", "bien_loi_nhuan_truoc_thue", "bien_loi_nhuan_rong", "roe", "roa"]),
     ("Chi phí", ["ty_le_chi_phi_ban_hang", "ty_le_chi_phi_qldn"]),
     ("Thanh khoản", ["thanh_toan_hien_hanh", "thanh_toan_nhanh"]),
     ("Đòn bẩy", ["tl_no_von", "tl_no_tai_san", "kha_nang_tra_lai"]),

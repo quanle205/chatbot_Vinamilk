@@ -79,11 +79,11 @@ def main():
     assert mixed_ratios.status_code == 200, mixed_ratios.text
     columns = {c["company"]: c for c in mixed_ratios.json()["comparison"]}
     assert len(columns) == 12 and "Bibica" in columns["BBC"]["error"] and not columns["BBC"]["groups"]
-    assert sum(len(g["items"]) for g in columns["VNM"]["groups"]) == 14 and all(i["scope"] == "hợp nhất" for g in columns["VNM"]["groups"] for i in g["items"])
+    assert sum(len(g["items"]) for g in columns["VNM"]["groups"]) == 15 and all(i["scope"] == "hợp nhất" for g in columns["VNM"]["groups"] for i in g["items"])
     assert client.post("/api/ratios", json={"companies": ["BBC", "BBC"], "period": "Q2/2026"}).status_code == 422
     assert client.post("/api/ratios", json={"companies": ["BBC", "VNM"], "period": "Q3/2026"}).status_code == 422      # cả hai đều thiếu kỳ -> báo lỗi
     # Đối chiếu độc lập: tự tính lại tỷ số của các công ty từ bảng DuckDB, phải khớp từng chữ số
-    definitions = {"Biên lợi nhuận gộp": ("loi_nhuan_gop", "doanh_thu_thuan"), "Biên lợi nhuận ròng": ("loi_nhuan_sau_thue", "doanh_thu_thuan"),
+    definitions = {"Biên lợi nhuận gộp": ("loi_nhuan_gop", "doanh_thu_thuan"), "Biên lợi nhuận trước thuế": ("loi_nhuan_truoc_thue", "doanh_thu_thuan"), "Biên lợi nhuận ròng": ("loi_nhuan_sau_thue", "doanh_thu_thuan"),
                    "Hệ số nợ trên vốn chủ sở hữu": ("no_phai_tra", "von_chu_so_huu"), "Hệ số nợ trên tổng tài sản": ("no_phai_tra", "tong_tai_san")}
     def raw(code, period, metric):
         with duckdb.connect(str(DB_PATH), read_only=True, config={"threads": 1}) as db:
