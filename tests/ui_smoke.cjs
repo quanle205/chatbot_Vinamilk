@@ -43,14 +43,18 @@ async function contrast(page) {
     assert.deepEqual(await contrast(page),[],`${theme}: trends contrast`);
     await page.locator('#theme-toggle').click();
     assert.equal(await page.locator('html').getAttribute('data-theme'),theme==='dark'?'light':'dark');
-    assert.equal(await page.evaluate(()=>Object.values(window.Chart.instances).filter(c=>c.canvas.isConnected).every(c=>c.data.datasets[0].borderColor===getComputedStyle(document.documentElement).getPropertyValue('--accent').trim())),true);
+    assert.equal(await page.evaluate(()=>Object.values(window.Chart.instances).filter(c=>c.canvas.isConnected).every(c=>c.data.datasets.filter(d=>!d.series).every(d=>d.borderColor===getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()))),true);
     await page.locator('#theme-toggle').click();
+    await page.locator('#c-none').click(); await page.locator('#c-grid input[value="VNM"]').check();      // Phân rã biến động chỉ có cho Vinamilk
     for(const mode of ['growth','explain']) {
-      await page.locator('#c-mode').selectOption(mode); await page.locator('#chart-form button').click();
+      await page.locator('#c-mode').selectOption(mode); await page.locator('#chart-form button[type=submit]').click();
       await page.locator('.tbl').first().waitFor();
       assert.deepEqual(await contrast(page),[],`${theme}: ${mode} contrast`);
     }
-    await page.locator('[data-view="ratios"]').click(); await page.locator('.r-val').first().waitFor();
+    await page.locator('#tab-ratios').click(); await page.locator('.r-val').first().waitFor();      // một doanh nghiệp: thẻ chỉ số
+    await page.locator('#c-all').click(); await page.locator('#ratios-out .rt-cap').waitFor();               // đủ 12 doanh nghiệp: bảng so sánh
+    assert.equal(await page.locator('#ratios-out .tbl thead th').count(),13);
+    await page.locator('#c-none').click(); await page.locator('#c-grid input[value="VNM"]').check(); await page.locator('.r-val').first().waitFor();
     await page.locator('.r-more summary').first().click();
     assert.deepEqual(await contrast(page),[],`${theme}: ratios contrast`);
     await page.locator('#rail').click(); await page.locator('#theme-toggle').click();

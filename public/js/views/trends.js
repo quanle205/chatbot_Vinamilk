@@ -1,5 +1,7 @@
-// Màn hình Xu hướng & so sánh: chọn doanh nghiệp (mặc định đủ 12), kiểu và chỉ tiêu, vẽ biểu đồ/bảng từ /api/chart
-// (cùng khối dữ liệu với câu trả lời của trợ lý, không cần khóa Gemini).
+// Màn hình Phân tích: danh sách doanh nghiệp (mặc định đủ 12) dùng chung cho hai tab.
+//  - Xu hướng & so sánh (file này): chọn kiểu và chỉ tiêu, vẽ biểu đồ/bảng từ /api/chart (cùng khối dữ liệu với câu trả lời của trợ lý).
+//  - Chỉ số tài chính (ratios.js): lấy danh sách doanh nghiệp và danh mục kỳ từ file này.
+// Không cần khóa Gemini.
 import { $, h } from "../dom.js";
 import { ALL, CHART_METRICS, EXPLAIN_METRICS, PERIODS } from "../config.js";
 import { attempt, post } from "../api.js";
@@ -9,6 +11,11 @@ import { loadCompanyOptions, setOptions } from "../company-catalog.js";
 
 const isSeries = () => $("c-mode").value === "series";
 let catalog = null;
+const listeners = [];                                                  // ratios.js đăng ký để biết khi doanh nghiệp được chọn thay đổi
+export const onSelectionChange = fn => listeners.push(fn);
+export const getCatalog = () => catalog;
+export const refreshAnalysis = () => listeners.forEach(fn => fn());      // main.js gọi khi mở màn hình, để tab Chỉ số tài chính tải theo lựa chọn hiện tại
+export const selectedCompanies = () => selected();
 
 const boxes = () => [...$("c-grid").querySelectorAll("input[type=checkbox]")];
 const selected = () => boxes().filter(box => box.checked).map(box => box.value);
@@ -21,7 +28,7 @@ function fillMetrics(select, list, optional) {
 }
 
 // Các kỳ chọn được: kỳ có báo cáo của ít nhất `need` doanh nghiệp đã chọn (kiểu so sánh cùng kỳ cần từ hai doanh nghiệp).
-function periodsFor(companies, need, quarterOnly, withBase) {
+export function periodsFor(companies, need, quarterOnly, withBase) {
   return Object.keys(catalog.periods).filter(p => (!quarterOnly || p.startsWith("Q")) && coverage(companies, p, withBase) >= need);
 }
 // Số doanh nghiệp có báo cáo kỳ `period` (và kỳ gốc để so sánh nếu `withBase`).
@@ -38,7 +45,7 @@ function baseOf(period) {                         // kỳ gốc: cùng kỳ năm
 }
 
 // Kỳ mặc định: kỳ có báo cáo của nhiều doanh nghiệp đã chọn nhất (bằng nhau thì lấy kỳ mới hơn), để bảng hiện được đủ doanh nghiệp.
-const bestPeriod = (companies, periods, withBase) => periods.reduce((best, p) => (best == null || coverage(companies, p, withBase) >= coverage(companies, best, withBase) ? p : best), null);
+export const bestPeriod = (companies, periods, withBase) => periods.reduce((best, p) => (best == null || coverage(companies, p, withBase) >= coverage(companies, best, withBase) ? p : best), null);
 
 function syncControls() {
   const mode = $("c-mode"), chosen = selected(), button = $("chart-form").querySelector("button[type=submit]"), status = $("c-compare-status");
@@ -68,6 +75,17 @@ function syncControls() {
   }
   status.textContent = problem;
   button.disabled = !!problem;
+  listeners.forEach(fn => fn());
+}
+
+// Hai tab dùng chung danh sách doanh nghiệp: đổi tab không mất lựa chọn.
+function showTab(name) {
+  for (const tab of document.querySelectorAll(".tab[data-tab]")) {
+    const on = tab.dataset.tab === name;
+    tab.setAttribute("aria-selected", String(on)); tab.tabIndex = on ? 0 : -1;
+    $("panel-" + tab.dataset.tab).hidden = !on;
+  }
+  listeners.forEach(fn => fn());
 }
 
 async function draw(e) {
@@ -91,6 +109,14 @@ export function initTrends() {
   syncControls();
   $("c-mode").onchange = $("c-period").onchange = $("c-kind").onchange = syncControls;
   $("c-grid").onchange = syncControls;
+  document.querySelectorAll(".tab[data-tab]").forEach(tab => {
+    tab.onclick = () => showTab(tab.dataset.tab);
+    tab.onkeydown = e => {                                              // mũi tên trái/phải chuyển tab (mẫu WAI-ARIA)
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+      const tabs = [...document.querySelectorAll(".tab[data-tab]")], next = tabs[(tabs.indexOf(tab) + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length];
+      showTab(next.dataset.tab); next.focus();
+    };
+  });
   $("c-all").onclick = () => { boxes().forEach(box => (box.checked = true)); syncControls(); };
   $("c-none").onclick = () => { boxes().forEach(box => (box.checked = false)); syncControls(); };
   $("chart-form").onsubmit = draw;

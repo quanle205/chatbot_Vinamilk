@@ -206,11 +206,17 @@ def ratios(body: RatiosBody, request: Request):
         if any(code not in analytics.COMPANIES for code in companies):
             raise ValueError("Mã doanh nghiệp chưa được hỗ trợ.")
         if len(companies) > 1:
-            return {"period": body.period, "comparison": [
-                {"company": code, "name": analytics.COMPANIES[code],
-                 "groups": company_ratios(code, body.period, body.basis)["groups"]}
-                for code in companies
-            ]}
+            columns, errors = [], []
+            for code in companies:
+                try:
+                    groups = company_ratios(code, body.period, body.basis)["groups"]
+                    columns.append({"company": code, "name": analytics.COMPANIES[code], "groups": groups})
+                except ValueError as e:                          # doanh nghiệp thiếu kỳ này: hiện "chưa có báo cáo", không làm hỏng cả bảng
+                    errors.append(str(e))
+                    columns.append({"company": code, "name": analytics.COMPANIES[code], "groups": [], "error": str(e)})
+            if len(errors) == len(columns):
+                raise ValueError(errors[0])
+            return {"period": body.period, "comparison": columns}
         return company_ratios(companies[0], body.period, body.basis)
     except ValueError as e:
         raise HTTPException(422, str(e))
@@ -223,6 +229,7 @@ def company_ratios(company, period, basis):
     for group in res["groups"]:
         for item in group["items"]:
             item["sources"] = source_links(item.get("sources", []))
+            item["scope"] = "hợp nhất"
     return res
 
 

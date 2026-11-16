@@ -8,14 +8,13 @@ import { store } from "./storage.js";
 import { onPeriod, setPeriod } from "./state.js";
 import { initLookup } from "./views/lookup.js";
 import { getStats } from "./stats.js";
-import { initRatios, showRatios } from "./views/ratios.js?v=multi-company";
-import { initTrends } from "./views/trends.js?v=multi-company";
+import { initRatios } from "./views/ratios.js?v=analysis";
+import { initTrends, refreshAnalysis } from "./views/trends.js?v=analysis";
 
-const VIEW_TITLES = { lookup: "Tra cứu số liệu", trends: "Xu hướng & so sánh", ratios: "Chỉ số tài chính" };
+const VIEW_TITLES = { lookup: "Tra cứu số liệu", trends: "Phân tích" };
 const FEATURES = [                                                      // lối tắt ở màn hình chào tới các chức năng chính
   ["lookup", "book", "Tra cứu số liệu", "Nhiều doanh nghiệp, kèm trang PDF"],
-  ["trends", "zigzag", "Xu hướng & so sánh", "Theo quý hoặc so sánh doanh nghiệp"],
-  ["ratios", "ratio", "Chỉ số tài chính", "Sinh lời, thanh khoản, đòn bẩy"],
+  ["trends", "zigzag", "Phân tích", "Xu hướng, so sánh và chỉ số tài chính"],
 ];
 const views = ["chat", ...Object.keys(VIEW_TITLES)];
 let currentView = "chat";
@@ -36,7 +35,7 @@ function showView(name) {
   views.forEach(v => ($("view-" + v).hidden = v !== name));
   document.querySelectorAll(".nav-item[data-view]").forEach(b => (b.dataset.view === name ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")));
   refreshTitle(); closeSide();
-  if (name === "ratios") showRatios();
+  if (name === "trends") refreshAnalysis();
 }
 
 // ------------------------------------------------------------------ kỳ báo cáo (menu thả xuống ở thanh trên)

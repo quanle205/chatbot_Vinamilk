@@ -12,7 +12,7 @@ tăng trưởng, vẽ xu hướng. Số liệu lấy từ PDF bằng OCR, đã �
 | src/ingest | pipeline dữ liệu: `preprocess.py` (PDF -> OCR), `parse_statements.py`, `repair_identities.py`, `build_db.py` |
 | src/rag | `chunking.py`, truy xuất BM25 + mở rộng truy vấn theo biệt danh chỉ tiêu (`retriever.py`); nhánh vector n-gam chỉ giữ để đối chứng (đo: kém BM25, trọng số 0) |
 | src/tools | tra số, tỷ số, tăng trưởng, chuỗi kỳ, phân rã biến động (`explain.py`), máy tính (`TOOL_SPECS`, `call_tool`) |
-| src/ratios.py, src/stats.py | bảng chỉ số tài chính (mục Chỉ số tài chính) và số đếm độ phủ dữ liệu (hàng số liệu ở màn hình chào), đều không qua mô hình |
+| src/ratios.py, src/stats.py | bảng chỉ số tài chính (tab Chỉ số tài chính) và số đếm độ phủ dữ liệu (hàng số liệu ở màn hình chào), đều không qua mô hình |
 | src/web | lớp web dùng chung: giới hạn tốc độ, liên kết nguồn (PDF chính thức, ảnh trang), kiểu dữ liệu vào |
 | src/agent | agent Gemini function-calling gọi công cụ + retriever; kiểm tra số bám nguồn (`guard.py`); dựng dữ liệu biểu đồ/bảng từ kết quả công cụ (`charts.py`) |
 | src/feedback.py | lưu phản hồi 👍/👎 qua giao diện `FeedbackStore` (mặc định ghi log, tùy chọn webhook) |
@@ -22,8 +22,11 @@ tăng trưởng, vẽ xu hướng. Số liệu lấy từ PDF bằng OCR, đã �
 
 ## Tính năng
 
-- **Xu hướng & so sánh (nhiều doanh nghiệp):** danh sách 12 doanh nghiệp luôn hiện và mặc định chọn đủ (có nút Chọn/Bỏ chọn tất cả). Xu hướng theo quý vẽ các doanh nghiệp trên cùng một biểu đồ nhiều đường kèm bảng doanh nghiệp × kỳ; "So sánh hai kỳ" cho thay đổi tuyệt đối và % của từng doanh nghiệp;
-  "So sánh cùng kỳ" vẽ cột. Doanh nghiệp chưa có báo cáo kỳ đó hiện "Chưa có số" thay vì làm hỏng cả bảng. Kỳ mặc định là kỳ có nhiều doanh nghiệp nhất. Chọn riêng Vinamilk thì dùng danh mục chỉ tiêu đầy đủ và có "Phân rã biến động".
+- **Phân tích (một mục, hai tab):** danh sách 12 doanh nghiệp luôn hiện, mặc định chọn đủ (có nút Chọn/Bỏ chọn tất cả) và dùng chung cho cả hai tab.
+  *Xu hướng & so sánh:* xu hướng theo quý vẽ các doanh nghiệp trên cùng một biểu đồ nhiều đường kèm bảng doanh nghiệp × kỳ; "So sánh hai kỳ" cho thay đổi tuyệt đối và % từng doanh nghiệp; "So sánh cùng kỳ" vẽ cột; "Phân rã biến động" chỉ cho Vinamilk.
+  *Chỉ số tài chính:* một doanh nghiệp thì hiện thẻ chỉ số (Vinamilk 14 chỉ số) kèm công thức, đường xu hướng và nguồn; nhiều doanh nghiệp thì hiện bảng chỉ số × doanh nghiệp, ghi phạm vi từng số (riêng/hợp nhất).
+  Các doanh nghiệp ngoài Vinamilk chỉ tính 4 chỉ số có đủ số liệu đầu vào cùng phạm vi (ROE, ROA, vòng quay tồn kho cần số dư đầu kỳ hoặc giá vốn nên không tính để tránh so sánh sai). Doanh nghiệp chưa có báo cáo hoặc chưa có số đã đối chiếu của kỳ đó hiện rõ thay vì làm hỏng cả bảng.
+  Kỳ mặc định là kỳ có nhiều doanh nghiệp nhất. Độ chính xác: `tests/test_consumer.py` tự tính lại từ DuckDB các tỷ số của 11 công ty (hơn 100 giá trị) và so với API, phải khớp từng chữ số; đây là kiểm tra phép tính, không phải đối chiếu OCR với PDF.
 - **Tra cứu số liệu (nhiều doanh nghiệp):** chọn Vinamilk hoặc bất kỳ trong 11 công ty hàng tiêu dùng, thêm các doanh nghiệp khác để so sánh cùng kỳ, chọn chỉ tiêu và kỳ. Số liệu có nguồn trang khi đã đối chiếu được chỉ tiêu. Dùng mục này (không phải Trò chuyện) để tra cứu và so sánh các công ty. **Phần Trò chuyện chỉ có dữ liệu Vinamilk**; hỏi về công ty khác trong Trò chuyện sẽ được hướng dẫn sang mục Doanh nghiệp. Xem [hướng dẫn nhập dữ liệu](docs/consumer-data.md).
 
 - **Hỏi đáp có dẫn chứng:** câu trả lời kèm nguồn (báo cáo, trang PDF, ảnh trang có khung đánh dấu dòng) và cảnh báo số không khớp.
@@ -44,7 +47,7 @@ tăng trưởng, vẽ xu hướng. Số liệu lấy từ PDF bằng OCR, đã �
 ## Giao diện
 
 Giao diện tĩnh (HTML + CSS + module ES thuần, không bước build), thanh bên đơn giản kiểu Copilot: **Cuộc trò chuyện mới** và **Tìm kiếm** (lọc các cuộc trò chuyện đã lưu, gõ không dấu vẫn tìm được),
-cùng ba chức năng hay dùng nhất: **Tra cứu số liệu**, **Xu hướng & so sánh**, **Chỉ số tài chính**; bên dưới là danh sách "Cuộc trò chuyện" (đổi tên/xóa, lưu trong `localStorage`) và hai chấm DuckDB/Gemini
+cùng ba chức năng hay dùng nhất: **Tra cứu số liệu** và **Phân tích** (Xu hướng & so sánh, Chỉ số tài chính); bên dưới là danh sách "Cuộc trò chuyện" (đổi tên/xóa, lưu trong `localStorage`) và hai chấm DuckDB/Gemini
 từ `/api/health`. Thanh bên thu gọn được thành thanh biểu tượng (nhớ lựa chọn). Vùng nội dung có chọn kỳ báo cáo, màn hình chào với 3 lối tắt chức năng, 6 câu gợi ý và hàng số liệu thật.
 Phím tắt: `Ctrl/Cmd+K` tìm kiếm, `/` vào ô nhập. Tông xanh chàm, điểm nhấn xanh ngọc/tím; nút Sáng/Tối ở cuối thanh bên trái nhớ lựa chọn. Khi chưa chọn, giao diện theo hệ thống. Thanh bên thành ngăn kéo dưới 900 px. Biểu đồ đổi màu cùng giao diện.
 
@@ -108,7 +111,7 @@ set GEMINI_API_KEY=khoa-cua-ban
 python -m uvicorn api.index:app --port 8000
 ```
 
-Không có khóa thì mục Trò chuyện báo "chưa sẵn sàng", các mục Tra cứu, Xu hướng, Chỉ số tài chính vẫn dùng được. Giới hạn mỗi phút theo IP: `RATE_LIMIT_PER_MINUTE` (hỏi đáp, mặc định 6), `BROWSE_LIMIT_PER_MINUTE` (tra cứu, thuyết minh, biểu đồ; mặc định 30), `FEEDBACK_LIMIT_PER_MINUTE` (mặc định 20).
+Không có khóa thì mục Trò chuyện báo "chưa sẵn sàng", các mục Tra cứu số liệu và Phân tích vẫn dùng được. Giới hạn mỗi phút theo IP: `RATE_LIMIT_PER_MINUTE` (hỏi đáp, mặc định 6), `BROWSE_LIMIT_PER_MINUTE` (tra cứu, thuyết minh, biểu đồ; mặc định 30), `FEEDBACK_LIMIT_PER_MINUTE` (mặc định 20).
 
 ## Kiểm thử
 

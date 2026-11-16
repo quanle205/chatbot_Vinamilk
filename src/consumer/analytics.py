@@ -143,7 +143,7 @@ def ratios(company, period, basis, analyst):
         sources = {s["url"]: s for s in [*a[1], *b[1]]}
         items.append({"name": name, "value": current, "unit": unit, "history": history,
                       "formula": f"{catalog.METRICS[numerator][0]} / {catalog.METRICS[denominator][0]}",
-                      "sources": list(sources.values()), "notes": [],
+                      "sources": list(sources.values()), "notes": [], "scope": a[2],
                       "delta": current - previous if previous is not None else None})
     return {"period": period, "basis": basis, "compare_period": prior,
             "compare_label": "quý liền trước" if basis == "quy" else "cùng kỳ năm trước",

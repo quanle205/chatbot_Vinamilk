@@ -74,6 +74,33 @@ def main():
     wide = client.post("/api/chart", json={"mode": "companies", "companies": every, "metrics": ["doanh_thu_thuan"], "period": "Q2/2026"}).json()["charts"][0]
     assert len(wide["rows"]) == 12 and sum(r["value"] is not None for r in wide["rows"]) >= 4      # thiếu kỳ thì hiện "Chưa có số", không chặn cả bảng
     assert client.post("/api/chart", json={"mode": "series", "companies": ["VNM"], "metrics": ["Doanh thu thuần"]}).json()["charts"][0]["kind"] == "series"
+    # Chỉ số nhiều doanh nghiệp: thiếu kỳ ở một doanh nghiệp không làm hỏng cả bảng; mỗi số ghi phạm vi
+    mixed_ratios = client.post("/api/ratios", json={"companies": every, "period": "Q2/2026"})
+    assert mixed_ratios.status_code == 200, mixed_ratios.text
+    columns = {c["company"]: c for c in mixed_ratios.json()["comparison"]}
+    assert len(columns) == 12 and "Bibica" in columns["BBC"]["error"] and not columns["BBC"]["groups"]
+    assert sum(len(g["items"]) for g in columns["VNM"]["groups"]) == 14 and all(i["scope"] == "hợp nhất" for g in columns["VNM"]["groups"] for i in g["items"])
+    assert client.post("/api/ratios", json={"companies": ["BBC", "BBC"], "period": "Q2/2026"}).status_code == 422
+    assert client.post("/api/ratios", json={"companies": ["BBC", "VNM"], "period": "Q3/2026"}).status_code == 422      # cả hai đều thiếu kỳ -> báo lỗi
+    # Đối chiếu độc lập: tự tính lại tỷ số của các công ty từ bảng DuckDB, phải khớp từng chữ số
+    definitions = {"Biên lợi nhuận gộp": ("loi_nhuan_gop", "doanh_thu_thuan"), "Biên lợi nhuận ròng": ("loi_nhuan_sau_thue", "doanh_thu_thuan"),
+                   "Hệ số nợ trên vốn chủ sở hữu": ("no_phai_tra", "von_chu_so_huu"), "Hệ số nợ trên tổng tài sản": ("no_phai_tra", "tong_tai_san")}
+    def raw(code, period, metric):
+        with duckdb.connect(str(DB_PATH), read_only=True, config={"threads": 1}) as db:
+            return [r[0] for r in db.execute("""select distinct value from (
+                select f.value from facts f where f.company=? and f.period=? and f.metric=? and f.basis in ('quy','point','annual')
+                union all select f.value from document_facts f join documents d using(id)
+                where d.company=? and d.period=? and f.metric=? and f.basis in ('quy','point','annual'))""",
+                [code, period, metric, code, period, metric]).fetchall()]
+    audited = 0
+    for period in ("Q1/2025", "Q2/2025", "Q3/2025", "Q4/2025", "Q1/2026", "Q2/2026", "Q3/2026", "FY2025"):
+        for column in client.post("/api/ratios", json={"companies": list(COMPANIES), "period": period}).json()["comparison"]:
+            for item in (i for g in column["groups"] for i in g["items"] if i.get("value") is not None):
+                num, den = (raw(column["company"], period, m) for m in definitions[item["name"]])
+                assert len(num) == 1 and len(den) == 1, (column["company"], period, item["name"])
+                assert abs(num[0] / den[0] - item["value"]) < 1e-9, (column["company"], period, item["name"])
+                audited += 1
+    assert audited >= 100, audited
     ASK_LIMIT.reset()
     for q in ["So sánh doanh thu thuần Q3/2026 của MCM và QNS", "Doanh thu quý hai năm 2025 của Đường Quảng Ngãi?",
               "Doanh thu Vinamilk và MCM Q2/2026 chênh bao nhiêu?"]:

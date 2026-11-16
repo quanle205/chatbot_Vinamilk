@@ -320,3 +320,12 @@
   .company-actions { display:flex; gap:8px; margin-bottom:8px; }
   .company-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:4px 12px; }
   .form-row .company-grid label { flex-direction:row; align-items:center; gap:8px; color:var(--ink); font-size:var(--fs-sm); }
+  .tabs { display:flex; gap:6px; margin:4px 0 12px; border-bottom:1px solid var(--line); }
+  .tab { padding:9px 16px; border:0; border-bottom:3px solid transparent; background:none; color:var(--mute); font:inherit; font-weight:600; cursor:pointer; }
+  .tab[aria-selected="true"] { color:var(--accent); border-bottom-color:var(--accent); }
+  .tab:hover { color:var(--ink); }
+  .rt-scope { display:block; color:var(--mute); font-size:var(--fs-xs); }
+  .rt-note { margin:6px 0 0; }
+  .rt-tbl th[scope=row], .rt-tbl thead th:first-child { min-width:190px; position:sticky; left:0; background:var(--soft); z-index:1; }
+  .rt-tbl td { min-width:132px; }
+  .rt-tbl td.off { color:var(--mute); }

@@ -48,8 +48,7 @@
       <button class="nav-item" id="search-btn" type="button" title="Tìm kiếm (Ctrl+K)" aria-expanded="false" aria-controls="search-box"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg><span class="t">Tìm kiếm</span></button>
       <div class="search-box t" id="search-box" hidden><input id="search-q" type="search" maxlength="80" placeholder="Tìm trong các cuộc trò chuyện" aria-label="Tìm trong các cuộc trò chuyện" autocomplete="off"></div>
       <button class="nav-item" type="button" data-view="lookup"><svg class="ic" aria-hidden="true"><use href="#i-book"/></svg><span class="t">Tra cứu số liệu</span></button>
-      <button class="nav-item" type="button" data-view="trends"><svg class="ic" aria-hidden="true"><use href="#i-zigzag"/></svg><span class="t">Xu hướng &amp; so sánh</span></button>
-      <button class="nav-item" type="button" data-view="ratios"><svg class="ic" aria-hidden="true"><use href="#i-ratio"/></svg><span class="t">Chỉ số tài chính</span></button>
+      <button class="nav-item" type="button" data-view="trends"><svg class="ic" aria-hidden="true"><use href="#i-zigzag"/></svg><span class="t">Phân tích</span></button>
     </nav>
     <div class="label t" id="recent-label">Cuộc trò chuyện</div>
     <ul class="recent" id="recent" aria-labelledby="recent-label"></ul>
@@ -121,47 +120,46 @@
       </div></div>
     </section>
 
-    <section class="view" id="view-trends" aria-label="Xu Hướng và So Sánh" hidden>
-      <div class="scroll"><div class="col">
-        <h2 class="page-title">Xu hướng &amp; so sánh</h2>
-        <p class="muted">Theo dõi nhiều doanh nghiệp qua các quý trên cùng một biểu đồ, so sánh hai kỳ hoặc so sánh các doanh nghiệp cùng kỳ. Mặc định chọn đủ 12 doanh nghiệp.</p>
-        <form class="form-row" id="chart-form">
-          <fieldset class="company-set" id="c-companies" disabled>
-            <legend>Doanh nghiệp <span id="c-count" class="muted"></span></legend>
-            <div class="company-actions"><button type="button" class="btn" id="c-all">Chọn tất cả</button><button type="button" class="btn" id="c-none">Bỏ chọn tất cả</button></div>
-            <div class="company-grid" id="c-grid"><label><input type="checkbox" value="VNM" checked> Vinamilk (VNM)</label></div>
-          </fieldset>
-          <label>Kiểu
-            <select id="c-mode"><option value="series" selected>Xu hướng theo quý</option><option value="growth">So sánh hai kỳ</option><option value="companies">So sánh doanh nghiệp cùng kỳ</option><option value="explain">Phân rã biến động (Vinamilk)</option></select></label>
-          <label>Chỉ tiêu<select id="c-m1"></select></label>
-          <label>Chỉ tiêu thêm<select id="c-m2"></select></label>
-          <label>Chỉ tiêu thêm<select id="c-m3"></select></label>
-          <label id="c-period-wrap">Kỳ báo cáo<select id="c-period"></select></label>
-          <label id="c-kind-wrap">So với
-            <select id="c-kind"><option value="yoy" selected>Cùng kỳ năm trước</option><option value="qoq">Quý liền trước</option></select></label>
-          <label>Cách tính
-            <select id="c-basis"><option value="quy" selected>Riêng quý</option><option value="luy_ke">Lũy kế từ đầu năm</option></select></label>
-          <button class="btn primary" type="submit">Vẽ biểu đồ</button>
-        </form>
-        <p id="c-company-status" class="note" role="status" hidden></p>
-        <div id="c-compare-status" role="status" class="note"></div>
-        <div id="chart-out" aria-live="polite"><p class="note">Chọn kiểu và chỉ tiêu rồi bấm Vẽ biểu đồ.</p></div>
-      </div></div>
-    </section>
-
-    <section class="view" id="view-ratios" aria-label="Chỉ Số Tài Chính" hidden>
+    <section class="view" id="view-trends" aria-label="Phân Tích" hidden>
       <div class="scroll"><div class="col wide">
-        <h2 class="page-title">Chỉ số tài chính</h2>
-        <p class="muted">Chọn một hoặc nhiều doanh nghiệp để xem chỉ số cùng kỳ và nguồn báo cáo.</p>
-        <form class="form-row" id="ratios-form">
-          <label>Doanh nghiệp<select id="r-company" disabled><option value="VNM">Vinamilk</option></select></label>
-          <details id="r-peers" class="company-picker" hidden><summary>Chọn thêm doanh nghiệp</summary><div class="company-options"></div></details>
-          <label>Kỳ báo cáo<select id="r-period"></select></label>
-          <label>Cách tính<select id="r-basis"><option value="quy" selected>Riêng quý</option><option value="luy_ke">Lũy kế từ đầu năm</option></select></label>
-          <button class="btn primary" type="submit">Xem chỉ số</button>
-        </form>
-        <p id="r-company-status" class="note" role="status" hidden></p>
-        <div id="ratios-out" aria-live="polite"></div>
+        <h2 class="page-title">Phân tích</h2>
+        <p class="muted">Chọn doanh nghiệp (mặc định đủ 12) rồi xem xu hướng, so sánh hoặc chỉ số tài chính. Mọi số liệu kèm nguồn trang PDF.</p>
+        <fieldset class="company-set" id="c-companies" disabled>
+          <legend>Doanh nghiệp <span id="c-count" class="muted"></span></legend>
+          <div class="company-actions"><button type="button" class="btn" id="c-all">Chọn tất cả</button><button type="button" class="btn" id="c-none">Bỏ chọn tất cả</button></div>
+          <div class="company-grid" id="c-grid"><label><input type="checkbox" value="VNM" checked> Vinamilk (VNM)</label></div>
+        </fieldset>
+        <p id="c-company-status" class="note" role="status" hidden></p>
+        <div class="tabs" role="tablist" aria-label="Loại phân tích">
+          <button class="tab" type="button" role="tab" id="tab-trends" data-tab="trends" aria-selected="true" aria-controls="panel-trends">Xu hướng &amp; so sánh</button>
+          <button class="tab" type="button" role="tab" id="tab-ratios" data-tab="ratios" aria-selected="false" aria-controls="panel-ratios" tabindex="-1">Chỉ số tài chính</button>
+        </div>
+        <div id="panel-trends" role="tabpanel" aria-labelledby="tab-trends">
+          <form class="form-row" id="chart-form">
+            <label>Kiểu
+              <select id="c-mode"><option value="series" selected>Xu hướng theo quý</option><option value="growth">So sánh hai kỳ</option><option value="companies">So sánh doanh nghiệp cùng kỳ</option><option value="explain">Phân rã biến động (Vinamilk)</option></select></label>
+            <label>Chỉ tiêu<select id="c-m1"></select></label>
+            <label>Chỉ tiêu thêm<select id="c-m2"></select></label>
+            <label>Chỉ tiêu thêm<select id="c-m3"></select></label>
+            <label id="c-period-wrap">Kỳ báo cáo<select id="c-period"></select></label>
+            <label id="c-kind-wrap">So với
+              <select id="c-kind"><option value="yoy" selected>Cùng kỳ năm trước</option><option value="qoq">Quý liền trước</option></select></label>
+            <label>Cách tính
+              <select id="c-basis"><option value="quy" selected>Riêng quý</option><option value="luy_ke">Lũy kế từ đầu năm</option></select></label>
+            <button class="btn primary" type="submit">Vẽ biểu đồ</button>
+          </form>
+          <div id="c-compare-status" role="status" class="note"></div>
+          <div id="chart-out" aria-live="polite"><p class="note">Chọn kiểu và chỉ tiêu rồi bấm Vẽ biểu đồ.</p></div>
+        </div>
+        <div id="panel-ratios" role="tabpanel" aria-labelledby="tab-ratios" hidden>
+          <form class="form-row" id="ratios-form">
+            <label>Kỳ báo cáo<select id="r-period"></select></label>
+            <label>Cách tính<select id="r-basis"><option value="quy" selected>Riêng quý</option><option value="luy_ke">Lũy kế từ đầu năm</option></select></label>
+            <button class="btn primary" type="submit">Xem chỉ số</button>
+          </form>
+          <div id="r-status" role="status" class="note"></div>
+          <div id="ratios-out" aria-live="polite"></div>
+        </div>
       </div></div>
     </section>
   </main>
