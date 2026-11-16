@@ -43,3 +43,25 @@ Số dư dùng giá trị cuối kỳ. Kết quả kinh doanh lấy đúng cột
 ## Thử ở màn hình Tra cứu số liệu
 
 Chọn công ty, kỳ và chỉ tiêu, ví dụ: doanh thu thuần Q3/2026 của MCM và QNS; hàng tồn kho của QNS năm 2025; báo cáo Q2/2025 của Cholimex Food.
+
+## Trích số tự động từ PDF quét (9 công ty ngoài MCM và QNS)
+
+MCM và QNS có số đã đối chiếu tay (`facts`). Chín công ty còn lại dùng `src/ingest/consumer_extract.py`, trích số theo **nội dung** thay vì theo tiêu đề trang
+(OCR hay đọc sai tiêu đề nên cách cũ bỏ sót cả bảng). Một bảng chỉ được nhận khi các số tự thỏa đẳng thức của báo cáo và chỉ có đúng một bộ số thỏa:
+
+- Cân đối kế toán: tổng tài sản = nợ phải trả + vốn chủ sở hữu (cột cuối kỳ), và bằng tổng nguồn vốn nếu đọc được.
+- Kết quả kinh doanh: doanh thu thuần − giá vốn = lợi nhuận gộp; lợi nhuận thuần + lợi nhuận khác = trước thuế; trước thuế − thuế = sau thuế (hoặc 61 + 62 = 60). Báo cáo trải trên hai trang liền nhau được gộp.
+- Lưu chuyển tiền tệ: dòng tiền kinh doanh + đầu tư + tài chính = lưu chuyển tiền thuần.
+- Loại bảng tính bằng nghìn/triệu đồng và tổng tài sản ngoài khoảng 5×10¹⁰–5×10¹⁴ đồng; nhiều bộ số thỏa cùng lúc (vd báo cáo riêng và hợp nhất trong một file) thì bỏ qua, không đoán.
+- Số bị OCR bỏ sót trong một dòng được gán vào đúng cột theo tọa độ; tồn kho chỉ nhận khi 140 = 141 + 149 đủ ba dòng.
+
+Phạm vi (hợp nhất/riêng) lấy từ tiêu đề trang bằng so khớp mờ; không xác định được thì ghi "theo báo cáo".
+
+Độ chính xác đã đo: chạy bộ trích lên MCM và QNS rồi so với số đối chiếu tay: **95 số khớp, 0 sai** (`tests/test_consumer_extract.py`).
+Đối chiếu trực tiếp với PDF gốc cho KDC Q3/2026 (6 số: doanh thu, trước thuế, sau thuế, quý và lũy kế 9 tháng): khớp từng chữ số.
+Phép kiểm chéo lũy kế = lũy kế kỳ trước + riêng quý khớp 55/78 trường hợp; các trường hợp lệch còn lại do công ty trình bày lại số kỳ trước (như MCM, QNS đã ghi ở `consumer_period_checks.json`) hoặc do báo cáo Q1/2025 của BHN là báo cáo riêng, không do trích sai.
+
+Trang bị OCR hỏng thường là trang xoay ngang. Chạy lại bằng `python -m src.ingest.consumer_ocr --windows-ocr --retry-poor --company <MÃ>` (tự thử xoay 90°/−90°/180°), rồi `python -m src.ingest.build_consumer_db`.
+
+Độ phủ sau khi trích: 5 chỉ số chung (biên gộp, trước thuế, ròng, nợ/vốn chủ, nợ/tổng tài sản) tính được **299/400 (75%)** ô công ty × quý có báo cáo (trước đó khoảng một phần ba).
+Còn thiếu chủ yếu do trang kết quả kinh doanh hoặc cân đối vẫn bị OCR đọc nhiễu (SAB, SBT, PAN Q3/2026, QNS Q3/2025, CMF/VCF một số quý); các ô này hiện "Chưa có số đối chiếu".

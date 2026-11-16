@@ -2,15 +2,9 @@
 from collections import defaultdict
 import json
 from pathlib import Path
-import re
 
-from src.consumer.catalog import fold
-from src.ingest.consumer_statements import (
-    page_header, read_balance, read_cash_flow, read_income, statement_scope, uses_vnd,
-)
+from src.ingest.consumer_extract import extract_document
 from src.ingest.consumer_ocr import INTERIM, RAW, inputs
-
-DOCUMENT_CURRENCY = re.compile(r"don vi tien te.{0,110}dong viet nam.{0,12}\bvnd\b")
 
 
 def note_chunks(boxes, chunk_lines=12, overlap=3, whole_page=False):
@@ -61,10 +55,8 @@ def add_documents(db):
         section = section if section in {"CDKT", "KQKD", "LCTT"} else "Báo cáo"
         company, period = row["company_code"], report_period(row)
         needs_facts = (company, period) not in verified_periods
-        balance_pages = []
         indexed = 0
-        pages = []
-        default_vnd = False
+        pages = {}
         for file in sorted((INTERIM / path.stem).glob("*.json")):
             boxes = json.loads(file.read_text(encoding="utf-8"))
             page = int(file.stem)
@@ -73,27 +65,10 @@ def add_documents(db):
                 indexed += 1
                 chunks.extend((path.stem, page, i, part) for i, part in enumerate(parts))
             if needs_facts:
-                pages.append((page, boxes))
-                if not default_vnd:
-                    default_vnd = any(DOCUMENT_CURRENCY.search(fold(" ".join(part.split()))) for part in parts)
-        for page, boxes in pages:
-            header = page_header(boxes)
-            if not uses_vnd(header, default_vnd):
-                continue
-            if section in {"Báo cáo", "KQKD"}:
-                for (metric, basis), (value, scope) in read_income(boxes, header, period, company, section == "KQKD").items():
-                    candidates[company, period, metric, basis].append(
-                        (path.stem, metric, basis, value, page, scope, "KQKD"))
-            if section == "CDKT" or (section == "Báo cáo" and
-                                     ("tinh hinh tai chinh" in header or "doi ke toan" in header)):
-                balance_pages.append((page, boxes, statement_scope(header)))
-            if section in {"Báo cáo", "LCTT"}:
-                for (metric, basis), (value, scope) in read_cash_flow(boxes, header, period, company, section == "LCTT").items():
-                    candidates[company, period, metric, basis].append(
-                        (path.stem, metric, basis, value, page, scope, "LCTT"))
-        for (metric, basis), (value, page, scope) in read_balance(balance_pages).items():
-            candidates[company, period, metric, basis].append(
-                (path.stem, metric, basis, value, page, scope, "CDKT"))
+                pages[page] = boxes
+        if needs_facts:                                   # trích theo nội dung + đẳng thức kế toán (xem consumer_extract.py)
+            for (metric, basis), (value, page, scope, statement) in extract_document(pages, company, period).items():
+                candidates[company, period, metric, basis].append((path.stem, metric, basis, value, page, scope, statement))
         documents.append((path.stem, company, period,
                           row["source_url"], section, row["pages"], indexed))
     db.executemany("insert into documents values (?,?,?,?,?,?,?)", documents)

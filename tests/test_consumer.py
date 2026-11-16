@@ -113,7 +113,8 @@ def main():
     trend = client.post("/api/chart", json={
         "mode": "series", "companies": ["BBC"], "metrics": ["doanh_thu_thuan"]
     }).json()["charts"][0]
-    assert len(trend["rows"]) == 4 and any(row["value"] is None for row in trend["rows"])
+    assert len(trend["rows"]) == 4 and all(row["value"] is not None for row in trend["rows"])
+    assert abs(sum(row["value"] for row in trend["rows"]) / 1_780_710_120_529 - 1) < 0.02      # 4 quý cộng lại xấp xỉ doanh thu cả năm 2025 trong báo cáo kiểm toán
     compare = client.post("/api/chart", json={
         "mode": "companies", "companies": ["MCM", "QNS"], "period": "Q3/2026", "metrics": ["doanh_thu_thuan"]
     }).json()["charts"][0]
