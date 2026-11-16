@@ -98,6 +98,9 @@ def main():
         assert reply.status_code == 200, reply.text
         sources = reply.json()["sources"]
         assert sources and all(s["doc"].startswith(f"{code} · Q2/2025") for s in sources), reply.text
+    from src.consumer.service import question_companies
+    assert question_companies("tài chính quý 1 năm 2025 của công ty habenco") == ["BHN"]      # gõ sai tên vẫn nhận ra
+    assert question_companies("Vinamilk doanh thu quý 2/2025") == []                          # không nhận nhầm công ty khác
     print("PASS: nhận diện 11 công ty, nguồn của 99 PDF, tra cứu, so sánh, dòng tiền và thuyết minh.")
 
 
