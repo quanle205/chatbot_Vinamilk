@@ -22,7 +22,7 @@ tăng trưởng, vẽ xu hướng. Số liệu lấy từ PDF bằng OCR, đã �
 
 ## Tính năng
 
-- **Doanh nghiệp:** tra cứu báo cáo của 11 công ty hàng tiêu dùng. Số liệu có nguồn trang khi đã đối chiếu được chỉ tiêu. Dùng mục này (không phải Trò chuyện) để tra cứu và so sánh các công ty. **Phần Trò chuyện chỉ có dữ liệu Vinamilk**; hỏi về công ty khác trong Trò chuyện sẽ được hướng dẫn sang mục Doanh nghiệp. Xem [hướng dẫn nhập dữ liệu](docs/consumer-data.md).
+- **Doanh nghiệp:** tra cứu báo cáo của 11 công ty hàng tiêu dùng. Chatbot trả số có nguồn trang khi đã đối chiếu được chỉ tiêu, hoặc trích nội dung PDF liên quan. Gõ tên hoặc mã công ty trực tiếp trong Trò chuyện. Khi không nêu kỳ, chatbot dùng kỳ trong ngữ cảnh hoặc kỳ mới nhất có báo cáo. Xem [hướng dẫn nhập dữ liệu](docs/consumer-data.md).
 
 - **Hỏi đáp có dẫn chứng:** câu trả lời kèm nguồn (báo cáo, trang PDF, ảnh trang có khung đánh dấu dòng) và cảnh báo số không khớp.
 - **Biểu đồ xu hướng và bảng so sánh kỳ:** khi câu hỏi dẫn tới `get_series` (xu hướng nhiều kỳ) hoặc `get_growth` (so sánh hai kỳ),

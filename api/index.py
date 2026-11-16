@@ -82,12 +82,17 @@ def stats():
 @app.post("/api/ask")
 def ask(body: AskBody, request: Request):
     ASK_LIMIT.check(request)
-    others = [c for c in service.question_companies(body.question) if c != "VNM"]
-    if others:                                   # phần trò chuyện chỉ có dữ liệu Vinamilk; doanh nghiệp khác xem ở mục Doanh nghiệp
-        names = ", ".join(analytics.COMPANIES[c] for c in others if c in analytics.COMPANIES)
-        return {"answer": f"Phần trò chuyện chỉ trả lời về báo cáo tài chính hợp nhất của Vinamilk, chưa có dữ liệu về {names}. "
-                          "Bạn có thể hỏi về Vinamilk, hoặc dùng mục Doanh nghiệp để tra cứu và so sánh các công ty khác.",
-                "sources": [], "notes": [], "warnings": [], "unsupported_numbers": [], "charts": [], "clarify": None}
+    companies = service.question_companies(body.question) or ([body.company] if body.company else [])
+    context = None
+    if not companies:
+        context = service.inherited_question(body.question, [t.text for t in body.history[-2 * MAX_HISTORY_TURNS:] if t.role == "user"])
+        if context:
+            companies = service.question_companies(context)
+    if companies:
+        has_lookup = service.question_metrics(catalog.fold(body.question))
+        if not (body.history or body.company or has_lookup) and VinamilkAgent._out_of_scope(body.question):   # giá cổ phiếu, tư vấn đầu tư...: nhánh tra cứu công ty cũng phải từ chối
+            return service.result("Mình chỉ trả lời về số liệu và nội dung trong báo cáo tài chính của các công ty trong danh mục; không trả lời về giá cổ phiếu, dự báo hay tư vấn đầu tư.")
+        return service.answer_question(body.question, companies, body.company_period, context)
     contents = [types.Content(role=t.role, parts=[types.Part(text=t.text)]) for t in body.history[-2 * MAX_HISTORY_TURNS:]]
     try:
         r = get_agent().ask(body.question, contents)
