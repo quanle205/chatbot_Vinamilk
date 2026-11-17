@@ -516,9 +516,25 @@ def answer_question(question, companies, selected_period=None, context=None):
                   list(dict.fromkeys(n for a in answers for n in a["notes"])))
 
 
+def missing_report_text(companies, period):
+    """Kỳ được hỏi chưa có báo cáo: nói rõ mỗi công ty hiện có những kỳ nào và gợi ý hỏi kỳ gần nhất."""
+    lines = [f"Chưa có báo cáo {PERIODS[period]} của {', '.join(companies)} trong bộ dữ liệu."]
+    for code in companies:
+        have = {row[0] for row in repository.documents(code)}
+        quarters = [p for p in PERIODS if p in have and p.startswith("Q")]
+        years = [PERIODS[p] for p in PERIODS if p in have and p.startswith("FY")]
+        if quarters:
+            text = f"{quarters[0]} đến {quarters[-1]}" if len(quarters) > 1 else quarters[0]
+            lines.append(f"- **{COMPANIES[code][0]} ({code}):** hiện có {text}" + (f" và báo cáo {', '.join(years)}" if years else "")
+                         + f". Bạn có thể hỏi lại với {quarters[-1]}.")
+        elif years:
+            lines.append(f"- **{COMPANIES[code][0]} ({code}):** hiện chỉ có báo cáo {', '.join(years)}.")
+    return "\n".join(lines)
+
+
 def answer_for_period(query, companies, period):
     if not any(repository.documents(code, period) for code in companies):
-        return result(f"Chưa có báo cáo cho {PERIODS[period]} của {', '.join(companies)}.")
+        return result(missing_report_text(companies, period))
     if matches(query, ("thuyet minh",)):
         topic = re.sub(r"\b(?:q|quy)\s*([1-4]|iv|iii|ii|i)\b|\b20\d{2}\b", " ", query)
         for alias in ("thuyet minh", "cho toi", "cho biet", "bao cao tai chinh", "nam", "ve", "cua",
