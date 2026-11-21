@@ -49,6 +49,27 @@ def question_companies(question):
     return exact or fuzzy_companies(query) or (list(COMPANIES) if asks_all(query) else [])
 
 
+OFF_TOPIC_WORDS = ("gia co phieu", "thi gia", "gia muc tieu", "von hoa", "nen mua", "nen ban", "co nen dau tu", "nen dau tu",
+                   "tu van dau tu", "khuyen nghi", "chung khoan hom nay", "co phieu nao")
+REPORT_WORDS = ("lai", "lo", "loi nhuan", "doanh thu", "tai chinh", "bao cao", "bctc", "tai san", "von", "no", "dong tien",
+                "hang ton kho", "chi phi", "tom tat", "tinh hinh", "ket qua kinh doanh")
+
+
+def out_of_scope(question, follow_up=False):
+    """Câu hỏi về công ty trong danh mục nhưng nằm ngoài báo cáo tài chính (giá cổ phiếu, tư vấn đầu tư).
+
+    Từ khóa ngoài phạm vi luôn bị từ chối. Câu có dấu hiệu hỏi báo cáo (chỉ tiêu, kỳ, so sánh, lãi lỗ...) hoặc là câu hỏi
+    nối tiếp thì đi thẳng vào tra cứu; còn lại mới hỏi bộ phân loại ý định."""
+    query = fold(question)
+    if matches(query, OFF_TOPIC_WORDS):
+        return True
+    if follow_up or question_metrics(query) or requested_periods(question) or matches(
+            query, (*REPORT_WORDS, *COMPARE_WORDS, *SERIES_WORDS, *RATIO_WORDS, "thuyet minh")):
+        return False
+    from src.agent.agent import VinamilkAgent
+    return VinamilkAgent._out_of_scope(question)
+
+
 def question_metrics(query):
     return {metric for metric, (label, aliases) in METRICS.items()
             if matches(query, (fold(label), *aliases))}
@@ -84,6 +105,11 @@ def requested_periods(question):
         latest_year = max(p.split("/")[1] for p in PERIODS if "/" in p)
         return [f"Q{q}/{year}" for year in (sorted(years) or [latest_year]) for q in dict.fromkeys(quarters)]
     return [f"FY{year}" for year in sorted(years)]
+
+
+def scope_text(scope):
+    """"báo cáo hợp nhất", "báo cáo riêng"; khi báo cáo không ghi rõ phạm vi thì nói vậy thay vì "báo cáo theo báo cáo"."""
+    return f"báo cáo {scope}" if scope in {"riêng", "hợp nhất"} else "phạm vi theo báo cáo gốc"
 
 
 def result(answer, sources=None, notes=None):
@@ -139,7 +165,7 @@ def lookup(companies, metric, period, basis="quy"):
             used_difference = True
             sources.append(repository.source(code, previous_period, base_scope, base_page, base_url, base_statement))
         values[code] = value
-        lines.append(f"- **{COMPANIES[code][0]} ({code}):** {fmt_ty(value)} tỷ đồng ({fmt_vnd(value)} đồng), báo cáo {scope}. "
+        lines.append(f"- **{COMPANIES[code][0]} ({code}):** {fmt_ty(value)} tỷ đồng ({fmt_vnd(value)} đồng), {scope_text(scope)}. "
                      f"Nguồn: {STATEMENT_NAMES.get(statement, statement)}, trang {page}.")
         sources.append(repository.source(code, period, scope, page, url, statement))
         if scope in {"riêng", "hợp nhất"}:
@@ -185,7 +211,7 @@ def summary(companies, period):
             lines.append("")
             continue
         scope = next(iter(mine.values()))[4]
-        lines += [f"**Tóm tắt báo cáo {PERIODS[period]} · {name}** (báo cáo {scope})", "",
+        lines += [f"**Tóm tắt báo cáo {PERIODS[period]} · {name}** ({scope_text(scope)})", "",
                   "| Chỉ tiêu | Giá trị (tỷ đồng) | Minh chứng |", "|---|---:|---|"]
         for metric in SUMMARY_METRICS:
             if metric in mine:
@@ -241,8 +267,12 @@ def vinamilk_values(period, metrics=COMPARE_METRICS, basis="quy"):
 
 def company_values(code, period, metrics=COMPARE_METRICS, basis="quy"):
     rows = repository.fact_rows([code], [period], list(metrics), basis)
+    if re.fullmatch(r"FY20\d{2}", period) and code != "SBT":      # SBT: năm tài chính kết thúc 30/6, quý 4 không phải cuối năm
+        # Số cả năm thiếu trong báo cáo năm (hoặc chưa có báo cáo năm): lấy cột lũy kế và số cuối kỳ của báo cáo quý 4 cùng năm.
+        have = {row[2] for row in rows}
+        rows += [row for row in repository.fact_rows([code], [f"Q4/{period[2:]}"], [m for m in metrics if m not in have], "luy_ke")]
     values = {metric: value for _, _, metric, value, *_ in rows}
-    sources = [repository.source(code, period, scope, page, url, statement) for _, _, _, _, statement, page, url, scope, _ in rows]
+    sources = [repository.source(code, p, scope, page, url, statement) for _, p, _, _, statement, page, url, scope, _ in rows]
     scopes = [row[7] for row in rows]
     return values, sources, max(set(scopes), key=scopes.count) if scopes else None
 
@@ -362,10 +392,16 @@ def series(companies, with_vinamilk, metrics, basis="quy"):
     """Một chỉ tiêu qua các quý: mỗi quý một dòng, mỗi doanh nghiệp một cột."""
     codes = (["VNM"] if with_vinamilk else []) + list(companies)
     quarters = [p for p in PERIODS if p.startswith("Q")]
-    texts, sources, empty = [], {}, []
+    texts, sources, empty, mixed = [], {}, [], {}
     for metric in metrics:
         table = {p: {code: entity_values(code, p, [metric], basis) for code in codes} for p in quarters}
         shown = [code for code in codes if any(metric in table[p][code][0] for p in quarters)]
+        for code in shown:
+            scopes = {p: table[p][code][2] for p in quarters if metric in table[p][code][0]}
+            separate = [p for p, s in scopes.items() if s == "riêng"]
+            # Công ty có báo cáo hợp nhất nhưng vài quý số lấy từ báo cáo riêng (BHN Q1/2025): không cộng, so sánh trực tiếp được.
+            if separate and len(separate) < len(scopes) and code != "VNM" and repository.has_consolidated(code):
+                mixed[code] = f"{entity_name(code)}: {', '.join(separate)} là báo cáo riêng"
         empty += [entity_name(code) for code in codes if code not in shown]
         if not shown:
             continue
@@ -380,7 +416,10 @@ def series(companies, with_vinamilk, metrics, basis="quy"):
                 for s in table[p][c][1]:
                     sources[(s.get("doc"), s.get("page"))] = s
         texts.append("\n".join(lines))
-    notes = ["Ô có dấu — là kỳ chưa có số đã đối chiếu."] if texts else []
+    notes = ["Kỳ không có trong bảng hoặc ô có dấu — là kỳ chưa có số đã đối chiếu."] if texts else []
+    if mixed:
+        notes.append("Phạm vi báo cáo không đồng nhất giữa các quý (" + "; ".join(mixed.values())
+                     + ", các quý còn lại không phải báo cáo riêng), nên không cộng hay so sánh trực tiếp các quý này.")
     if empty:
         notes.append(f"Chưa có số đã đối chiếu theo quý của: {', '.join(dict.fromkeys(empty))}.")
     if not texts:

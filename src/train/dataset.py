@@ -121,9 +121,12 @@ def _noise(rng: random.Random, s: str, p_noaccent: float) -> str:
     return s
 
 
-def build(seed: int = 7, per_template: int = 20) -> dict[str, list[tuple[str, str]]]:
-    """Trả {'train': [(câu hỏi, nhãn)], 'test': [...]}. Tập test dùng chỉ tiêu và mẫu câu chưa thấy khi huấn luyện."""
+def build(seed: int = 7, per_template: int = 20, groups: bool = False) -> dict[str, list]:
+    """Trả {'train': [(câu hỏi, nhãn)], 'test': [...]}. Tập test dùng chỉ tiêu và mẫu câu chưa thấy khi huấn luyện.
+
+    groups=True thêm 'train_groups': mẫu câu sinh ra từng câu train, để kiểm chứng chéo chia fold theo mẫu câu (compare_models.py)."""
     rng = random.Random(seed)
+    data_groups = []
     mterms, rterms = _metric_terms(), _ratio_terms()
     m_test = _split_keys([k for k, _ in mterms], seed)
     r_test = _split_keys([k for k, _ in rterms], seed + 1, 0.3)
@@ -148,6 +151,8 @@ def build(seed: int = 7, per_template: int = 20) -> dict[str, list[tuple[str, st
                 if "{q}" in tpl:
                     f["q"] = rng.choice(PERIODS)
                 data[part].append((_noise(rng, tpl.format(**f), p_noaccent), label))
+                if part == "train":
+                    data_groups.append(tpl)
 
     t_tr = [t for t in TOPICS if t not in topics_test]
     t_te = [t for t in TOPICS if t in topics_test]
@@ -164,9 +169,12 @@ def build(seed: int = 7, per_template: int = 20) -> dict[str, list[tuple[str, st
     for q in OOS_TRAIN:
         for _ in range(4):
             data["train"].append((_noise(rng, q, 0.3), "ngoai_pham_vi"))
+            data_groups.append(q)
     for q in OOS_TEST:
         data["test"].append((q, "ngoai_pham_vi"))
         data["test"].append((accent_free(q), "ngoai_pham_vi"))
+    if groups:
+        data["train_groups"] = data_groups
     return data
 
 

@@ -63,14 +63,17 @@ function initPeriodMenu() {
 }
 
 // ------------------------------------------------------------------ chỉ báo hệ thống và hàng số liệu
-function setDot(id, ok, text) { $("dot-" + id).className = "dot " + (ok ? "ok" : "bad"); $("val-" + id).textContent = text; }
+// state: "ok" (xanh), "idle" (cam: chạy được nhưng thiếu cấu hình, ví dụ chưa có khóa Gemini), "bad" (đỏ: lỗi thật)
+function setDot(id, state, text) { $("dot-" + id).className = "dot " + state; $("val-" + id).textContent = text; }
 async function refreshHealth() {
   try {
     const { data } = await get("/api/health");
-    const dbOk = data.ok === true && data.periods > 0, aiOk = data.ok === true && data.gemini_key === true;
-    setDot("db", dbOk, dbOk ? `${data.periods} kỳ` : "lỗi");
-    setDot("ai", aiOk, aiOk ? "sẵn sàng" : "lỗi");
-  } catch (_) { setDot("db", false, "lỗi"); setDot("ai", false, "lỗi"); }
+    if (!data) throw new Error("no data");
+    const dbOk = data.ok === true && data.periods > 0;
+    setDot("db", dbOk ? "ok" : "bad", dbOk ? `${data.periods} kỳ` : "lỗi dữ liệu");
+    // Thiếu khóa không phải lỗi: tra cứu, biểu đồ và hỏi đáp các công ty vẫn chạy, chỉ trợ lý Vinamilk cần Gemini.
+    setDot("ai", data.gemini_key === true ? "ok" : "idle", data.gemini_key === true ? "sẵn sàng" : "chưa có khóa");
+  } catch (_) { setDot("db", "bad", "không kết nối"); setDot("ai", "bad", "không kết nối"); }
 }
 
 async function fillWelcomeStats() {                                    // số đếm thật từ /api/stats; không lấy được thì chỉ giữ số kỳ (đếm từ danh sách kỳ)

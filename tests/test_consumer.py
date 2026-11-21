@@ -169,6 +169,26 @@ def main():
     margin = client.post("/api/ask", json={"question": "biên lợi nhuận gộp của Mộc Châu Milk năm 2025"}).json()
     assert "28,1%" in margin["answer"] and margin["sources"]
     assert question_companies("các công ty con của Vinamilk") == []
+    ASK_LIMIT.reset()
+    # "lãi hơn" là câu hỏi báo cáo, không bị bộ lọc ngoài phạm vi chặn; giá cổ phiếu vẫn bị chặn
+    masan = client.post("/api/ask", json={"question": "Masan Consumer và Vinamilk công ty nào lãi hơn năm 2025"}).json()
+    assert "So sánh Năm 2025: Vinamilk và Masan Consumer" in masan["answer"], masan["answer"]
+    # MCH không có báo cáo năm: số cả năm lấy từ cột lũy kế quý 4/2025, bằng tổng bốn quý
+    assert "| Lợi nhuận sau thuế (tỷ đồng) | 9.413,6 | 6.764,1 |" in masan["answer"]
+    stock = client.post("/api/ask", json={"question": "giá cổ phiếu SAB hôm nay bao nhiêu"}).json()
+    assert "không trả lời về giá cổ phiếu" in stock["answer"]
+    # KDC: báo cáo năm chỉ có kết quả kinh doanh; bảng cân đối cuối năm lấy từ báo cáo quý 4
+    kido = client.post("/api/ask", json={"question": "KIDO và Vinamilk công ty nào lãi hơn năm 2025"}).json()
+    assert "| Tổng tài sản (tỷ đồng) | 53.312,4 | 13.980,8 |" in kido["answer"], kido["answer"]
+    # phạm vi không rõ thì không viết "báo cáo theo báo cáo"
+    debt = client.post("/api/ask", json={"question": "nợ của Habeco quý 1/2026 là bao nhiêu"}).json()
+    assert "báo cáo theo báo cáo" not in debt["answer"] and "1.742,6" in debt["answer"]
+    ASK_LIMIT.reset()
+    # BHN Q1/2025 chỉ có báo cáo riêng, các quý khác là hợp nhất: bảng theo quý phải cảnh báo
+    bhn = client.post("/api/ask", json={"question": "lợi nhuận sau thuế Habeco qua các quý"}).json()
+    assert any("Habeco: Q1/2025 là báo cáo riêng" in n for n in bhn["notes"]), bhn["notes"]
+    mcm = client.post("/api/ask", json={"question": "lợi nhuận sau thuế Mộc Châu Milk qua các quý"}).json()
+    assert not any("không đồng nhất" in n for n in mcm["notes"])                                  # MCM chỉ có báo cáo riêng
     print("PASS: nhận diện 11 công ty, nguồn của 99 PDF, tra cứu, so sánh, dòng tiền và thuyết minh.")
 
 

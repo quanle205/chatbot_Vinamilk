@@ -68,7 +68,7 @@
   .status { padding:10px 12px 2px; display:flex; flex-direction:column; gap:4px; font-size:var(--fs-xs); color:var(--mute); }
   .ind { display:flex; align-items:center; gap:8px; }
   .dot { width:8px; height:8px; border-radius:50%; background:var(--mute); flex:none; }
-  .dot.ok { background:var(--ok); } .dot.bad { background:var(--bad); }
+  .dot.ok { background:var(--ok); } .dot.bad { background:var(--bad); } .dot.idle { background:#d97706; }
   .ind .val { margin-left:auto; }
 
   /* thu gọn thành thanh biểu tượng (chỉ máy tính) */

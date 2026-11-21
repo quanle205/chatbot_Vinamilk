@@ -1,0 +1,146 @@
+[
+ {
+  "model": "Hồi quy logistic",
+  "param": "C",
+  "value": 100,
+  "cv_f1": 0.861306291889988,
+  "cv_std": 0.12202188428699356,
+  "cv_all": {
+   "1": 0.851,
+   "10": 0.859,
+   "100": 0.861
+  },
+  "test": {
+   "accuracy": 0.8794871794871795,
+   "precision": 0.8863481981295006,
+   "recall": 0.8800000000000001,
+   "f1_macro": 0.8822960353573919,
+   "oos_caught": 63,
+   "oos_total": 70,
+   "in_scope_refused": 3
+  },
+  "holdout": {
+   "accuracy": 0.8032786885245902,
+   "precision": 0.8501540843979869,
+   "recall": 0.8230555555555557,
+   "f1_macro": 0.8167858993772483,
+   "oos_caught": 36,
+   "oos_total": 40,
+   "in_scope_refused": 5
+  }
+ },
+ {
+  "model": "SVM tuyến tính",
+  "param": "C",
+  "value": 0.1,
+  "cv_f1": 0.859341059860304,
+  "cv_std": 0.11211505230330206,
+  "cv_all": {
+   "0.1": 0.859,
+   "1": 0.858,
+   "10": 0.855
+  },
+  "test": {
+   "accuracy": 0.8974358974358975,
+   "precision": 0.9026465765584349,
+   "recall": 0.8964285714285714,
+   "f1_macro": 0.8980964483531046,
+   "oos_caught": 60,
+   "oos_total": 70,
+   "in_scope_refused": 1
+  },
+  "holdout": {
+   "accuracy": 0.8155737704918032,
+   "precision": 0.8369995308674554,
+   "recall": 0.8297222222222222,
+   "f1_macro": 0.8228514156423896,
+   "oos_caught": 34,
+   "oos_total": 40,
+   "in_scope_refused": 5
+  }
+ },
+ {
+  "model": "Naive Bayes (Complement)",
+  "param": "alpha",
+  "value": 0.1,
+  "cv_f1": 0.7931881144852804,
+  "cv_std": 0.0638640662818574,
+  "cv_all": {
+   "0.01": 0.77,
+   "0.1": 0.793,
+   "1.0": 0.792
+  },
+  "test": {
+   "accuracy": 0.7769230769230769,
+   "precision": 0.7860970351565316,
+   "recall": 0.7778571428571428,
+   "f1_macro": 0.7507763107829672,
+   "oos_caught": 57,
+   "oos_total": 70,
+   "in_scope_refused": 23
+  },
+  "holdout": {
+   "accuracy": 0.7745901639344263,
+   "precision": 0.7565112089934917,
+   "recall": 0.7647222222222221,
+   "f1_macro": 0.7522799871518899,
+   "oos_caught": 26,
+   "oos_total": 40,
+   "in_scope_refused": 15
+  }
+ },
+ {
+  "model": "Random Forest",
+  "param": "max_depth",
+  "value": 30,
+  "cv_f1": 0.792071659248071,
+  "cv_std": 0.09541390189332899,
+  "cv_all": {
+   "None": 0.792,
+   "30": 0.792
+  },
+  "test": {
+   "accuracy": 0.8871794871794871,
+   "precision": 0.8971046289694016,
+   "recall": 0.8892857142857142,
+   "f1_macro": 0.889994092022755,
+   "oos_caught": 68,
+   "oos_total": 70,
+   "in_scope_refused": 0
+  },
+  "holdout": {
+   "accuracy": 0.7827868852459017,
+   "precision": 0.8006727089816756,
+   "recall": 0.7897222222222222,
+   "f1_macro": 0.7814352381722054,
+   "oos_caught": 36,
+   "oos_total": 40,
+   "in_scope_refused": 11
+  }
+ },
+ {
+  "model": "Hồi quy logistic (đang dùng)",
+  "param": "C",
+  "value": 10,
+  "cv_f1": 0.8585579741196426,
+  "cv_std": 0.12453415134891872,
+  "test": {
+   "accuracy": 0.8948717948717949,
+   "precision": 0.9000112295076695,
+   "recall": 0.8942857142857144,
+   "f1_macro": 0.8961549004948669,
+   "oos_caught": 61,
+   "oos_total": 70,
+   "in_scope_refused": 1
+  },
+  "holdout": {
+   "accuracy": 0.7868852459016393,
+   "precision": 0.8353567067852783,
+   "recall": 0.806111111111111,
+   "f1_macro": 0.80038225423726,
+   "oos_caught": 34,
+   "oos_total": 40,
+   "in_scope_refused": 5
+  }
+ }
+]

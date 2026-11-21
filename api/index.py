@@ -89,8 +89,7 @@ def ask(body: AskBody, request: Request):
         if context:
             companies = service.question_companies(context)
     if companies:
-        has_lookup = service.question_metrics(catalog.fold(body.question))
-        if not (body.history or body.company or has_lookup) and VinamilkAgent._out_of_scope(body.question):   # giá cổ phiếu, tư vấn đầu tư...: nhánh tra cứu công ty cũng phải từ chối
+        if service.out_of_scope(body.question, follow_up=bool(body.history or body.company)):   # giá cổ phiếu, tư vấn đầu tư...: nhánh tra cứu công ty cũng phải từ chối
             return service.result("Mình chỉ trả lời về số liệu và nội dung trong báo cáo tài chính của các công ty trong danh mục; không trả lời về giá cổ phiếu, dự báo hay tư vấn đầu tư.")
         return service.answer_question(body.question, companies, body.company_period, context)
     contents = [types.Content(role=t.role, parts=[types.Part(text=t.text)]) for t in body.history[-2 * MAX_HISTORY_TURNS:]]

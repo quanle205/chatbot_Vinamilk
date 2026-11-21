@@ -49,6 +49,16 @@ def fact_rows(companies, periods, metrics, basis):
         ).fetchall()
 
 
+@lru_cache(maxsize=16)
+def has_consolidated(company):
+    """Công ty có ít nhất một báo cáo ghi rõ là hợp nhất (công ty có công ty con); MCM chỉ lập báo cáo riêng."""
+    with open_db() as db:
+        return bool(db.execute(
+            """select 1 from reports where company=? and scope='hợp nhất'
+               union all select 1 from document_facts f join documents d using(id) where d.company=? and f.scope='hợp nhất'
+               limit 1""", [company, company]).fetchone())
+
+
 @lru_cache(maxsize=8)
 def _notes_index(company, period):
     with open_db() as db:
