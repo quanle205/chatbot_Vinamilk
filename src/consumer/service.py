@@ -70,6 +70,45 @@ def out_of_scope(question, follow_up=False):
     return VinamilkAgent._out_of_scope(question)
 
 
+CATALOG_QUESTION = re.compile(
+    r"\b(bao nhieu|may|nhung|cac|danh sach|liet ke)\s+(cong ty|doanh nghiep|ma)\b(?!\s+con)"
+    r"|\b(cong ty|doanh nghiep|ma) nao\b.*\b(du lieu|danh muc|ho tro|tra cuu|hoi duoc|co the hoi)\b"
+    r"|\b(du lieu|danh muc)\b.*\b(gom|co|bao gom)\b.*\b(cong ty|doanh nghiep|ma|nhung gi|gi)\b"
+    r"|\bban (co|biet) (du lieu|thong tin) (gi|ve gi|cua ai|nhung gi)\b"
+    r"|\bpham vi du lieu\b")
+
+
+def catalog_question(question):
+    """Câu hỏi về chính bộ dữ liệu ("có bao nhiêu công ty trong dữ liệu của bạn", "những công ty nào"), không hỏi số liệu."""
+    question = question.split("\n(Nếu không nêu kỳ,", 1)[0]          # giao diện nối thêm kỳ mặc định; đó không phải kỳ người dùng hỏi
+    query = fold(question)
+    if (question_metrics(query) or requested_periods(question) or matches(query, COMPARE_WORDS + SERIES_WORDS + RATIO_WORDS)
+            or matches(query, ("cong ty con", "cong ty lien ket", "lai", "lo", "loi nhuan", "doanh thu", "no", "tai san", "von", "dong tien"))):
+        return False
+    return bool(CATALOG_QUESTION.search(query))
+
+
+def catalog_answer():
+    """Danh mục 12 công ty: Vinamilk (trợ lý Gemini, 6 kỳ đã đối chiếu) và 11 công ty hàng tiêu dùng (tra cứu theo quy tắc)."""
+    vnm_periods = list(VNM_QUARTERS)
+    lines = [f"Dữ liệu hiện có báo cáo tài chính của **{len(COMPANIES) + 1} công ty**: Vinamilk và {len(COMPANIES)} công ty hàng tiêu dùng khác.", "",
+             "| # | Công ty | Mã | Các kỳ có báo cáo |", "|---:|---|---|---|",
+             f"| 1 | Vinamilk | VNM | {vnm_periods[0]} đến {vnm_periods[-1]} (báo cáo hợp nhất, {len(vnm_periods)} kỳ) |"]
+    for i, (code, (name, _)) in enumerate(sorted(COMPANIES.items(), key=lambda kv: kv[1][0]), 2):
+        have = {row[0] for row in repository.documents(code)}
+        quarters = [p for p in PERIODS if p in have and p.startswith("Q")]
+        years = [PERIODS[p] for p in PERIODS if p in have and p.startswith("FY")]
+        text = f"{quarters[0]} đến {quarters[-1]}" if len(quarters) > 1 else (quarters[0] if quarters else "")
+        if years:
+            text += ("; " if text else "") + ", ".join(years)
+        lines.append(f"| {i} | {name} | {code} | {text} |")
+    lines += ["", "Bạn có thể hỏi số liệu của từng công ty (ví dụ \"doanh thu của KIDO quý 2/2026\"), xem theo quý "
+              "(\"lợi nhuận Sabeco qua các quý\") hoặc so sánh (\"so sánh Vinamilk với Masan Consumer năm 2025\")."]
+    notes = ["Vinamilk có số liệu đã đối chiếu đầy đủ cho cả 6 kỳ; số của 11 công ty còn lại được trích tự động từ PDF và chỉ nhận khi thỏa "
+             "đẳng thức kế toán, nên một số kỳ hoặc chỉ tiêu có thể chưa có."]
+    return result("\n".join(lines), [], notes)
+
+
 def question_metrics(query):
     return {metric for metric, (label, aliases) in METRICS.items()
             if matches(query, (fold(label), *aliases))}

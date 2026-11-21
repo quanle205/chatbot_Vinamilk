@@ -82,6 +82,8 @@ def stats():
 @app.post("/api/ask")
 def ask(body: AskBody, request: Request):
     ASK_LIMIT.check(request)
+    if service.catalog_question(body.question):              # "có bao nhiêu công ty trong dữ liệu": trả danh mục, không cần Gemini
+        return service.catalog_answer()
     companies = service.question_companies(body.question) or ([body.company] if body.company else [])
     context = None
     if not companies:

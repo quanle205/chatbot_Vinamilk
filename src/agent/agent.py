@@ -24,7 +24,7 @@ from .prompts import SYSTEM_PROMPT
 from .toolbox import Toolbox, result_for_model
 
 DEFAULT_MODEL = "gemini-3.8-flash"
-REFUSAL_TEXT = "Mình không thể trả lời câu hỏi này. Bạn có thể hỏi về số liệu và chỉ số trong BCTC hợp nhất của Vinamilk."
+REFUSAL_TEXT = "Mình không thể trả lời câu hỏi này. Bạn có thể hỏi về số liệu và chỉ số trong báo cáo tài chính của Vinamilk và 11 công ty hàng tiêu dùng khác trong danh mục."
 TRANSIENT_CODES = {500, 503, 504}
 RETRY_CODES = {500, 503}                    # 504 = mô hình đã chờ quá lâu: thử lại chỉ tốn thêm thời gian, chuyển mô hình luôn
 COOLDOWN_S = 300                            # mô hình vừa hỏng/quá tải bị bỏ qua trong khoảng này để các câu sau không phải chờ lại

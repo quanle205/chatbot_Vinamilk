@@ -5,7 +5,7 @@
 <meta name="theme-color" content="#4f46e5">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>FINANCE AI · Chatbot BCTC Vinamilk</title>
-<meta name="description" content="Chatbot báo cáo tài chính Vinamilk: hỏi đáp trên báo cáo tài chính hợp nhất Q1/2025 – Q2/2026, có trích dẫn trang PDF.">
+<meta name="description" content="Chatbot báo cáo tài chính Vinamilk và 11 công ty hàng tiêu dùng: hỏi đáp, tra cứu và so sánh, có trích dẫn trang PDF.">
 <link rel="icon" href="data:,">
 <script src="/js/theme.js"></script>
 <link rel="stylesheet" href="/css/app.css?v=health-idle">
@@ -78,7 +78,7 @@
       <div class="scroll" id="scroll">
         <div class="col">
           <div id="welcome">
-            <h2 class="w-title">Hỏi về báo cáo tài chính Vinamilk</h2>
+            <h2 class="w-title">Hỏi về báo cáo tài chính Vinamilk và 11 công ty khác</h2>
             <p class="w-desc">Trả lời dựa trên báo cáo tài chính hợp nhất Q1/2025 – Q2/2026. Mọi con số lấy từ cơ sở dữ liệu, có trích dẫn trang PDF và đúng với kỳ báo cáo bạn chọn (<span id="desc-period">Q2/2026</span>).</p>
             <div class="feats" id="feats"></div>
             <div class="label">GỢI Ý CÂU HỎI</div>
@@ -91,7 +91,7 @@
       <div class="composer-wrap">
         <div class="col">
           <form class="composer" id="composer" autocomplete="off">
-            <textarea id="q" rows="1" maxlength="450" placeholder="Nhập câu hỏi về báo cáo tài chính Vinamilk..." aria-label="Câu hỏi"></textarea>
+            <textarea id="q" rows="1" maxlength="450" placeholder="Hỏi về Vinamilk, Sabeco, Masan Consumer, KIDO... (12 công ty)" aria-label="Câu hỏi"></textarea>
             <div class="comp-row">
               <span class="ctx" id="ctx">Kỳ Q2/2026 · Báo cáo hợp nhất · Tool + RAG</span>
               <button class="send" id="send" type="submit" aria-label="Gửi câu hỏi" disabled><svg class="ic" aria-hidden="true"><use href="#i-up"/></svg></button>
@@ -165,6 +165,6 @@
   </main>
 </div>
 
-<script type="module" src="/js/main.js?v=health-idle"></script>
+<script type="module" src="/js/main.js?v=catalog-12"></script>
 </body>
 </html>

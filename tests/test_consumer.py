@@ -189,6 +189,17 @@ def main():
     assert any("Habeco: Q1/2025 là báo cáo riêng" in n for n in bhn["notes"]), bhn["notes"]
     mcm = client.post("/api/ask", json={"question": "lợi nhuận sau thuế Mộc Châu Milk qua các quý"}).json()
     assert not any("không đồng nhất" in n for n in mcm["notes"])                                  # MCM chỉ có báo cáo riêng
+    ASK_LIMIT.reset()
+    # hỏi về chính bộ dữ liệu: trả danh mục 12 công ty, không qua Gemini, không nói "chỉ có Vinamilk"
+    for q in ("có bao nhiêu công ty trong dữ liệu của bạn", "Bạn có dữ liệu của những công ty nào?", "co may cong ty",
+              "có những công ty nào trong tập dữ liệu\n(Nếu không nêu kỳ, hiểu là kỳ Q2/2026.)"):     # giao diện nối thêm kỳ mặc định
+        cat = client.post("/api/ask", json={"question": q}).json()
+        assert "**12 công ty**" in cat["answer"] and "| Sabeco | SAB |" in cat["answer"] and "| Vinamilk | VNM |" in cat["answer"], cat["answer"]
+    from src.consumer.service import catalog_question
+    assert not catalog_question("những công ty nào lỗ năm 2025") and not catalog_question("các công ty con của Vinamilk")
+    from src.agent.agent import REFUSAL_TEXT
+    from src.agent.prompts import SYSTEM_PROMPT
+    assert "11 công ty" in REFUSAL_TEXT and "12 công ty" in SYSTEM_PROMPT and "không so sánh với công ty khác" not in SYSTEM_PROMPT
     print("PASS: nhận diện 11 công ty, nguồn của 99 PDF, tra cứu, so sánh, dòng tiền và thuyết minh.")
 
 

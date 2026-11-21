@@ -10,6 +10,8 @@ export const SUGGESTIONS = [
   ["Tỷ số tài chính", "Biên lợi nhuận gộp quý 2/2026 là bao nhiêu?"],
   ["Xu hướng nhiều kỳ", "Lợi nhuận sau thuế biến động thế nào qua 6 kỳ từ Q1/2025 đến Q2/2026?"],
   ["Thuyết minh", "Các khoản vay và nợ thuê tài chính của Vinamilk gồm những gì?"],
+  ["Danh mục 12 công ty", "Có bao nhiêu công ty trong dữ liệu của bạn?"],
+  ["So sánh doanh nghiệp · Năm 2025", "So sánh Vinamilk với Masan Consumer và Sabeco năm 2025"],
 ];
 export const CHART_METRICS = ["Doanh thu thuần", "Giá vốn hàng bán", "Lợi nhuận gộp", "Chi phí bán hàng", "Chi phí quản lý doanh nghiệp",
   "Lợi nhuận sau thuế", "Tổng tài sản", "Nợ phải trả", "Vốn chủ sở hữu", "Hàng tồn kho", "Lưu chuyển tiền từ hoạt động kinh doanh"];
