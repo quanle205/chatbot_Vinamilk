@@ -8,8 +8,8 @@ import { store } from "./storage.js";
 import { onPeriod, setPeriod } from "./state.js";
 import { initLookup } from "./views/lookup.js";
 import { getStats } from "./stats.js";
-import { initRatios } from "./views/ratios.js?v=analysis";
-import { initTrends, refreshAnalysis } from "./views/trends.js?v=analysis";
+import { initRatios } from "./views/ratios.js?v=analysis2";
+import { initTrends, refreshAnalysis } from "./views/trends.js?v=analysis2";
 
 const VIEW_TITLES = { lookup: "Tra cứu số liệu", trends: "Phân tích" };
 const FEATURES = [                                                      // lối tắt ở màn hình chào tới các chức năng chính

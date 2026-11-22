@@ -3,7 +3,7 @@
 import { $ } from "../dom.js";
 import { ALL } from "../config.js";
 import { attempt, post } from "../api.js";
-import { commonPeriods, fillPeers, loadCompanyOptions, selectedPeers, setOptions } from "../company-catalog.js";
+import { anyPeriods, commonPeriods, fillPeers, loadCompanyOptions, selectedPeers, setOptions } from "../company-catalog.js";
 import { markdown } from "../markdown.js";
 import { sourcesEl } from "../sources.js";
 import { onPeriod } from "../state.js";
@@ -12,13 +12,14 @@ let catalog = null, syncPeers = () => {}, pending = false;
 const companies = () => [$("lk-company").value, ...selectedPeers($("lk-peers"))];
 
 function syncControls() {
-  const button = $("lookup-form").querySelector("button"), note = $("lk-note");
+  const button = $("lookup-form").querySelector("button[type=submit]"), note = $("lk-note");
   if (!catalog) { button.disabled = true; return; }
-  const periods = commonPeriods(catalog, companies());
-  setOptions($("lk-period"), Object.fromEntries(periods.map(p => [p, catalog.periods[p]])), periods.at(-1));
-  $("lk-basis").disabled = $("lk-period").value.startsWith("FY");
-  note.hidden = periods.length > 0;
-  note.textContent = periods.length ? "" : "Các doanh nghiệp đã chọn chưa có kỳ báo cáo chung. Bỏ bớt một doanh nghiệp để tiếp tục.";
+  const chosen = companies(), periods = anyPeriods(catalog, chosen);
+  setOptions($("lk-period"), Object.fromEntries(periods.map(p => [p, catalog.periods[p]])), commonPeriods(catalog, chosen).at(-1) ?? periods.at(-1));
+  const period = $("lk-period").value, lacking = chosen.filter(code => !catalog.available[code].includes(period)).map(code => catalog.companies[code]);
+  $("lk-basis").disabled = period.startsWith("FY");
+  note.hidden = !lacking.length;
+  note.textContent = lacking.length ? `Chưa có báo cáo ${catalog.periods[period]} của ${lacking.join(", ")}; các doanh nghiệp này sẽ hiện "Chưa có số". Đổi kỳ để so sánh đủ.` : "";
   button.disabled = pending || !periods.length;
 }
 

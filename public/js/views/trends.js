@@ -7,7 +7,7 @@ import { ALL, CHART_METRICS, EXPLAIN_METRICS, PERIODS } from "../config.js";
 import { attempt, post } from "../api.js";
 import { chartsEl } from "../charts.js";
 import { onPeriod } from "../state.js";
-import { loadCompanyOptions, setOptions } from "../company-catalog.js";
+import { companyPill, loadCompanyOptions, setChoices, setOptions } from "../company-catalog.js";
 
 const isSeries = () => $("c-mode").value === "series";
 let catalog = null;
@@ -44,6 +44,16 @@ function baseOf(period) {                         // kỳ gốc: cùng kỳ năm
   return $("c-kind").value === "qoq" ? (q === 1 ? `Q4/${y - 1}` : `Q${q - 1}/${y}`) : `Q${q}/${y - 1}`;
 }
 
+// Mọi kỳ đều hiện trong danh sách; kỳ chưa chọn được bị làm mờ kèm lý do (vd. Q1/2025 chưa có kỳ gốc "cùng kỳ năm trước" vì dữ liệu bắt đầu từ Q1/2025).
+function periodChoices(chosen, compare, withBase) {
+  const need = compare ? 2 : 1;
+  return Object.keys(catalog.periods).filter(p => compare || p.startsWith("Q")).map(p => {
+    const ok = coverage(chosen, p, withBase) >= need;
+    const why = ok ? "" : withBase && coverage(chosen, p, false) >= need ? " — chưa có kỳ gốc để so sánh" : compare ? " — chưa đủ 2 doanh nghiệp có báo cáo" : " — chưa có báo cáo";
+    return { value: p, text: catalog.periods[p] + why, disabled: !ok };
+  });
+}
+
 // Kỳ mặc định: kỳ có báo cáo của nhiều doanh nghiệp đã chọn nhất (bằng nhau thì lấy kỳ mới hơn), để bảng hiện được đủ doanh nghiệp.
 export const bestPeriod = (companies, periods, withBase) => periods.reduce((best, p) => (best == null || coverage(companies, p, withBase) >= coverage(companies, best, withBase) ? p : best), null);
 
@@ -64,16 +74,20 @@ function syncControls() {
   $("c-m2").closest("label").hidden = $("c-m3").closest("label").hidden = !isSeries();
   $("c-period-wrap").hidden = isSeries();
   $("c-kind-wrap").hidden = isSeries() || compare;
-  let problem = "";
+  let problem = "", hint = "";
   if (!chosen.length) problem = "Chọn ít nhất một doanh nghiệp.";
   else if (compare && chosen.length < 2) problem = "So sánh cùng kỳ cần chọn từ hai doanh nghiệp.";
   if (catalog) {
-    const growth = mode.value === "growth", allowed = isSeries() ? [] : periodsFor(chosen, compare ? 2 : 1, !compare, growth);
-    setOptions($("c-period"), Object.fromEntries(allowed.map(p => [p, catalog.periods[p]])), bestPeriod(chosen, allowed, growth));
+    const withBase = mode.value === "growth" || mode.value === "explain", choices = isSeries() ? [] : periodChoices(chosen, compare, withBase);
+    const allowed = choices.filter(c => !c.disabled).map(c => c.value);
+    setChoices($("c-period"), choices, bestPeriod(chosen, allowed, withBase));
     $("c-basis").disabled = compare && $("c-period").value.startsWith("FY");
-    if (!problem && !isSeries() && !allowed.length) problem = "Các doanh nghiệp đã chọn chưa có kỳ báo cáo phù hợp.";
+    if (!problem && !isSeries() && !allowed.length) problem = withBase ? "Chưa có cặp kỳ để so sánh với lựa chọn này. Thử đổi \"So với\" sang quý liền trước." : "Các doanh nghiệp đã chọn chưa có kỳ báo cáo phù hợp.";
+    if (!problem && withBase && allowed.length < choices.length)
+      hint = `${$("c-kind").value === "yoy" ? "Cùng kỳ năm trước" : "Quý liền trước"} chỉ so sánh được từ ${catalog.periods[allowed[0]]}, vì dữ liệu bắt đầu từ Q1/2025.`
+        + ($("c-kind").value === "yoy" ? " Chọn \"Quý liền trước\" để xem các quý của năm 2025." : "");
   }
-  status.textContent = problem;
+  status.textContent = problem || hint;
   button.disabled = !!problem;
   listeners.forEach(fn => fn());
 }
@@ -123,7 +137,7 @@ export function initTrends() {
   loadCompanyOptions($("c-company-status"), data => {
     catalog = data;
     $("c-grid").replaceChildren(...Object.entries(catalog.companies).map(([code, name]) =>
-      h("label", {}, h("input", { type: "checkbox", value: code, checked: true }), `${name} (${code})`)));
+      companyPill(code, name, { checked: true })));
     $("c-companies").disabled = false;
     syncControls();
   });

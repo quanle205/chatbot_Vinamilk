@@ -2,7 +2,7 @@
 import re
 from difflib import SequenceMatcher
 
-from src.consumer import assess, growth, insight, repository
+from src.consumer import assess, docqa, growth, insight, repository
 from src.consumer import catalog as _catalog
 from src.consumer.catalog import ALL_METRICS as METRICS, COMPANIES, PERIODS, fold
 from src.rag.text import ROMAN, find_periods, fmt_ty, fmt_vnd
@@ -84,6 +84,8 @@ def question_companies(question):
 
 OFF_TOPIC_WORDS = ("gia co phieu", "thi gia", "gia muc tieu", "von hoa", "nen mua", "nen ban", "co nen dau tu", "nen dau tu",
                    "tu van dau tu", "khuyen nghi", "chung khoan hom nay", "co phieu nao", "co phieu", "du bao", "du doan", "trien vong")
+SHARE_FACTS = ("so luong co phieu", "co phieu luu hanh", "co phieu pho thong", "menh gia", "co phieu quy", "so co phieu")
+ADVICE_WORDS = ("nen", "tot khong", "thi gia", "dau tu", "khuyen nghi", "tiem nang", "hap dan", "mua", "ban ra")
 REPORT_WORDS = ("lai", "lo", "loi nhuan", "doanh thu", "tai chinh", "bao cao", "bctc", "tai san", "von", "no", "dong tien",
                 "hang ton kho", "chi phi", "tom tat", "tinh hinh", "ket qua kinh doanh")
 
@@ -94,15 +96,47 @@ def out_of_scope(question, follow_up=False):
     Từ khóa ngoài phạm vi luôn bị từ chối. Câu có dấu hiệu hỏi báo cáo (chỉ tiêu, kỳ, so sánh, lãi lỗ...) hoặc là câu hỏi
     nối tiếp thì đi thẳng vào tra cứu; còn lại mới hỏi bộ phân loại ý định."""
     query = fold(question)
-    if matches(query, OFF_TOPIC_WORDS):
+    share_facts = matches(query, SHARE_FACTS) and not matches(query, ADVICE_WORDS)      # "số cổ phiếu đang lưu hành" là thông tin trong báo cáo, không phải tư vấn
+    if matches(query, OFF_TOPIC_WORDS) and not share_facts:
         return True
     if assess.asked_assessment(query):
         return False
-    if follow_up or question_metrics(query) or requested_periods(question) or matches(
-            query, (*REPORT_WORDS, *COMPARE_WORDS, *SERIES_WORDS, *RATIO_WORDS, "thuyet minh")):
+    # Câu có nêu tên công ty trong danh mục luôn được tra cứu: số liệu thì tra bảng, còn lại hỏi đáp trên chữ của PDF
+    # (không tìm thấy thì nói rõ và gợi ý câu hỏi khác). Chỉ giá cổ phiếu, dự báo, tư vấn đầu tư bị từ chối.
+    return False
+
+
+SUMMARY_WORDS = ("tom tat", "tinh hinh", "ket qua kinh doanh", "tong quan tai chinh")
+
+
+def wants_document(query, strict=False):
+    """Câu hỏi về chữ trong PDF (người, hồ sơ công ty, hoạt động...) chứ không phải số liệu: đi vào hỏi đáp tài liệu.
+
+    `strict`: chỉ nhận câu có từ khóa về người/hồ sơ; không strict thì câu hỏi lạ (không có chỉ tiêu, kỳ, so sánh...) cũng hỏi tài liệu."""
+    if docqa.has_phrase(query, docqa.PEOPLE):
+        return not asks_ratio(query)
+    if question_metrics(query) or asks_ratio(query) or matches(query, ("thuyet minh",)):
         return False
-    from src.agent.agent import VinamilkAgent
-    return VinamilkAgent._out_of_scope(question)
+    if docqa.has_phrase(query, docqa.PROFILE):
+        return True
+    if strict or unsupported_item(query):
+        return False
+    return not matches(query, (*REPORT_WORDS, *SUMMARY_WORDS, *COMPARE_WORDS, *SERIES_WORDS, *RATIO_WORDS))
+
+
+def document_answer(question, companies, with_vinamilk=False):
+    """Trả lời từ toàn bộ chữ trong PDF của (các) công ty, có trích dẫn; không tìm thấy thì gợi ý câu hỏi tương tự."""
+    question = question.split("\n(Nếu không nêu kỳ,", 1)[0]
+    codes = list(dict.fromkeys([*companies, *(["VNM"] if with_vinamilk else [])]))
+    if len(codes) > 4:
+        return result("Câu hỏi này nêu quá nhiều công ty cùng lúc. Hãy hỏi từng công ty hoặc nêu tối đa bốn công ty.")
+    replies = [docqa.answer(code, question) for code in codes]
+    text = "\n\n".join(r["text"] if len(codes) == 1 else f"### {docqa.entity_name(code)}\n\n{r['text']}" for code, r in zip(codes, replies))
+    sources = [src for r in replies for src in r["sources"]]
+    notes = list(dict.fromkeys(n for r in replies for n in r["notes"]))
+    reply = result(text, sources, notes)
+    reply["suggestions"] = [t for r in replies for t in r["suggestions"]][:4]
+    return reply
 
 
 CATALOG_QUESTION = re.compile(
@@ -188,7 +222,7 @@ def scope_text(scope):
 
 def result(answer, sources=None, notes=None):
     return {"answer": answer, "sources": sources or [], "notes": notes or [], "warnings": [],
-            "unsupported_numbers": [], "charts": [], "clarify": None}
+            "unsupported_numbers": [], "charts": [], "clarify": None, "suggestions": []}
 
 
 def lookup(companies, metric, period, basis="quy"):
@@ -360,7 +394,7 @@ def summary(companies, period):
 COMPARE_METRICS = ("doanh_thu_thuan", "loi_nhuan_gop", "loi_nhuan_truoc_thue", "loi_nhuan_sau_thue", "tong_tai_san", "no_phai_tra", "von_chu_so_huu")
 VNM_QUARTERS = ("Q1/2025", "Q2/2025", "Q3/2025", "Q4/2025", "Q1/2026", "Q2/2026")
 VNM_METRICS = {"dong_tien_kinh_doanh": "luu_chuyen_hdkd", "dong_tien_dau_tu": "luu_chuyen_dau_tu", "dong_tien_tai_chinh": "luu_chuyen_tai_chinh"}
-POINT_METRICS = {"tong_tai_san", "no_phai_tra", "von_chu_so_huu", "hang_ton_kho", "tai_san_ngan_han", "tai_san_dai_han", "no_ngan_han", "no_dai_han"}
+POINT_METRICS = _catalog.POINT_METRICS
 WIDE_LIMIT = 4                                             # tới 4 bên: mỗi bên một cột; nhiều hơn: mỗi công ty một dòng, xếp hạng
 
 
@@ -922,6 +956,10 @@ def answer_question(question, companies, selected_period=None, context=None):
     topic = assess.asked_assessment(query)
     if topic and not matches(query, COMPARE_WORDS + ("thuyet minh",)) and not asks_all(query):
         return assess_answer(question, companies, with_vinamilk, topic, basis)
+    named = [code for code in companies if matches(query, (code.lower(), *COMPANIES[code][1]))]
+    named_vnm = matches(query, VNM_WORDS)
+    if wants_document(query) and (named or named_vnm):                  # "công ty nào" trong câu không làm câu hỏi về một công ty thành câu hỏi cả danh mục
+        return document_answer(question, named, named_vnm)
     comparing = len(companies) + with_vinamilk >= 2 and matches(query, COMPARE_WORDS)
     no_period = not requested_periods(question) and not selected_period       # không nêu kỳ: để bảng so sánh tự chọn kỳ cả hai bên cùng có số
     if with_vinamilk or len(companies) > 2 or (comparing and (no_period or not question_metrics(query))):
@@ -943,9 +981,11 @@ def answer_question(question, companies, selected_period=None, context=None):
                     answers.append(answer_for_period(f"{query} luy ke", companies, available[-1]))
     if missing:
         answers.append(result(f"Chưa có báo cáo cho {', '.join(missing)}."))
-    return result("\n\n".join(a["answer"] for a in answers),
-                  [s for a in answers for s in a["sources"]],
-                  list(dict.fromkeys(n for a in answers for n in a["notes"])))
+    reply = result("\n\n".join(a["answer"] for a in answers),
+                   [s for a in answers for s in a["sources"]],
+                   list(dict.fromkeys(n for a in answers for n in a["notes"])))
+    reply["suggestions"] = [t for a in answers for t in a.get("suggestions", [])][:4]
+    return reply
 
 
 def missing_report_text(companies, period):
@@ -1000,4 +1040,22 @@ def answer_for_period(query, companies, period):
     replies = [lookup(companies, metric, period, basis) for metric in METRICS if metric in metrics]
     sources = {s["url"]: s for reply in replies for s in reply["sources"]}
     notes = list(dict.fromkeys(n for reply in replies for n in reply["notes"]))
-    return result("\n\n".join(reply["answer"] for reply in replies), list(sources.values()), notes)
+    reply = result("\n\n".join(reply["answer"] for reply in replies), list(sources.values()), notes)
+    if len(companies) == 1 and "Chưa có số" in reply["answer"]:
+        reply["suggestions"] = metric_suggestions(companies[0], [m for m in METRICS if m in metrics], period)
+    return reply
+
+
+def metric_suggestions(code, metrics, period):
+    """Câu hỏi tương tự cho số liệu chưa có: cùng chỉ tiêu ở kỳ gần nhất đã có số, rồi các chỉ tiêu chính của kỳ được hỏi (chỉ nêu cái đã có trong dữ liệu)."""
+    name = COMPANIES[code][0]
+    out = []
+    for metric in metrics:
+        have = [p for p in PERIODS if p.startswith("Q") and p != period and repository.facts([code], p, metric, "quy")]
+        if have:
+            nearest = min(have, key=lambda p: abs(list(PERIODS).index(p) - list(PERIODS).index(period)))
+            out.append({"label": f"{METRICS[metric][0]} {PERIODS[nearest]}", "query": f"{METRICS[metric][0]} {PERIODS[nearest]} của {name}"})
+    for metric in ("doanh_thu_thuan", "loi_nhuan_sau_thue", "tong_tai_san"):
+        if metric not in metrics and metric in METRICS and repository.facts([code], period, metric, "quy"):
+            out.append({"label": f"{METRICS[metric][0]} {PERIODS[period]}", "query": f"{METRICS[metric][0]} {PERIODS[period]} của {name}"})
+    return out[:4]

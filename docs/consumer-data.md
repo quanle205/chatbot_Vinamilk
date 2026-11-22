@@ -84,3 +84,12 @@ Kiểm tra nhất quán: hỏi mọi chỉ tiêu cho 11 công ty ở 3 kỳ (416
 - Doanh thu quý hai năm 2025 của Đường Quảng Ngãi.
 - Báo cáo tài chính quý 2/2025 của Cholimex Food.
 - Báo cáo niên độ 2025–2026 của AgriS.
+
+## Hỏi đáp trên chữ trong PDF (2026-11-22)
+
+Bảng `document_chunks` (18.827 đoạn chữ OCR của 99 PDF) và `data/processed/chunks.jsonl` (Vinamilk) được `src/consumer/docqa.py` dùng để trả lời câu hỏi không phải số liệu:
+- **Người** ("chủ tịch Masan là ai", "Hội đồng quản trị gồm những ai"): trích xác định từ dòng chữ có dạng "Ông/Mr Tên Chức danh"; chọn bản đọc rõ nhất (ít chữ lạ như å, ö, ü nhất), cùng độ rõ thì lấy kỳ mới nhất; dòng có ghi bổ nhiệm/miễn nhiệm thì không kết luận "hiện tại", chỉ trích nguyên văn.
+- **Câu hỏi khác**: BM25 trên toàn bộ đoạn, rồi chỉ giữ đoạn có các từ khóa có nghĩa (từ hiếm nặng gấp đôi từ thông dụng) nằm trong cùng 3 dòng liền nhau. Đủ ý mới nói "tìm thấy"; khớp một phần thì ghi "chỉ khớp một phần"; dưới 60% thì nói không tìm thấy.
+- Câu trả lời luôn kèm đoạn chữ gốc, tài liệu, kỳ, trang và liên kết PDF. Không có bước nào sinh chữ ngoài PDF; hàm `grounded` (tên riêng, số và trích dẫn [n] phải nằm trong đoạn trích) đã có sẵn để bật tóm tắt bằng Gemini sau này, mặc định chưa bật.
+- Gợi ý câu hỏi tương tự chỉ gồm chủ đề mà chính câu gợi ý tìm thấy kết quả trong PDF của công ty đó.
+- Hạn chế: OCR nhiễu (SAB, BHN, MCM...) làm sai dấu hoặc mất ký tự trong tên; báo cáo hai cột (KIDO) có thể trộn dòng nên chỉ có trích dẫn, không có câu trả lời tóm gọn.

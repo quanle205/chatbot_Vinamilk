@@ -84,7 +84,9 @@ function botEl(msg, isLast) {
     body.append(markdown(msg.text), ...(clarify ? [clarify] : []));
     return wrap;
   }
-  const parts = [markdown(msg.text),
+  const tips = isLast && (msg.suggestions || []).length ? h("div", { class: "suggest" }, h("p", { class: "note", text: "Bạn có thể hỏi tương tự:" }),
+    h("div", { class: "chips", role: "group", "aria-label": "Câu hỏi gợi ý" }, msg.suggestions.map(o => h("button", { class: "chip", type: "button", onclick: () => ask(o.query) }, o.label)))) : null;
+  const parts = [markdown(msg.text), tips,
     unsupported.length ? h("div", { class: "warn", role: "note" }, "Các số sau trong câu trả lời ", h("strong", { text: "không khớp" }), ` kết quả tra cứu, hãy kiểm tra lại: ${unsupported.join(", ")}`) : null,
     (msg.warnings || []).map(w => h("div", { class: "warn", role: "note", text: w })),
     chartsEl(msg.charts), sourcesEl(msg.sources, msg.notes), actionBar(msg, isLast)];
@@ -157,7 +159,7 @@ async function ask(question, regenerate = false, savedScope) {
     if (!r.ok) throw Object.assign(new Error(chatError(r.status, r.data)), { http: r.status });
     delete bot.pending;
     Object.assign(bot, { text: r.data.answer, sources: r.data.sources || [], notes: r.data.notes || [], charts: r.data.charts || [],
-      warnings: r.data.warnings || [], clarify: r.data.clarify || null, unsupported: r.data.unsupported_numbers || [] });
+      warnings: r.data.warnings || [], clarify: r.data.clarify || null, suggestions: r.data.suggestions || [], unsupported: r.data.unsupported_numbers || [] });
   } catch (e) {
     delete bot.pending;
     bot.error = e.name === "AbortError" ? "Đã dừng trả lời." : e.http ? e.message : NETWORK_ERROR;

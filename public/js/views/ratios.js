@@ -7,7 +7,7 @@ import { signed, vn } from "../format.js";
 import { sourceActionsEl, sourceTitle } from "../sources.js";
 import { onPeriod } from "../state.js";
 import { setOptions } from "../company-catalog.js";
-import { bestPeriod, getCatalog, onSelectionChange, periodsFor, selectedCompanies } from "./trends.js?v=analysis";
+import { bestPeriod, getCatalog, onSelectionChange, periodsFor, selectedCompanies } from "./trends.js?v=analysis2";
 
 const SPARK = { w: 120, h: 32, pad: 3 };
 let loadId = 0, lastKey = "";

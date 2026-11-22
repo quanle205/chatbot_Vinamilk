@@ -27,6 +27,7 @@ tăng trưởng, vẽ xu hướng. Số liệu lấy từ PDF bằng OCR, đã �
   **"vì sao lợi nhuận đổi"** bằng cầu nối doanh thu → biên gộp → chi phí khác → thuế (tổng các khoản mục đúng bằng chênh lệch; không suy đoán nguyên nhân kinh doanh); **câu đánh giá** ("sinh lời tốt không", "có an toàn về nợ không")
   so với chính công ty ở cùng kỳ năm trước và với nhóm doanh nghiệp có số cùng kỳ (xếp hạng, trung vị, xu hướng; không phải khuyến nghị đầu tư); xu hướng qua các quý kèm biểu đồ; so sánh Vinamilk với công ty khác.
   Hai kỳ khác phạm vi báo cáo (riêng và hợp nhất) không bị tính tăng trưởng hay vẽ nối với nhau. Hỏi khoản mục chưa có số (chi phí bán hàng, phải thu...) được trả lời thẳng "chưa có" kèm trang nguồn, không đưa bảng tóm tắt lan man; câu hỏi năm 2025 dùng báo cáo năm (hoặc báo cáo quý 4 nếu không có, ghi rõ). Số chưa đối chiếu không bị in lại chữ OCR, chỉ chỉ trang nguồn. Kỳ Vinamilk chưa có báo cáo (vd Q3/2026) được trả lời ngay mà không gọi Gemini.
+- **Hỏi đáp trên toàn bộ chữ trong PDF** (`src/consumer/docqa.py`, cả 12 công ty): ngoài số liệu, chatbot trả lời câu hỏi về người (chủ tịch, Hội đồng quản trị, Tổng giám đốc), hồ sơ công ty (trụ sở, kiểm toán, vốn điều lệ, ngành nghề, công ty con) và hoạt động, đọc từ chữ OCR của 99 PDF. Không bịa: tên và chức danh chỉ lấy khi nằm nguyên trong một dòng chữ của PDF (ưu tiên trang OCR sạch, tên lặp lại ở nhiều kỳ lấy cách viết phổ biến nhất); câu hỏi khác được trả lời bằng trích dẫn nguyên văn kèm tài liệu, kỳ và trang, và chỉ nói "tìm thấy" khi các từ khóa có nghĩa của câu hỏi nằm gần nhau trong đoạn (khớp một phần thì ghi rõ). Không tìm thấy thì nói thẳng và gợi ý câu hỏi tương tự; mọi câu gợi ý đã được chạy thử trên chính dữ liệu nên bấm vào là có kết quả. Chữ trích là OCR, có thể sai dấu; mở Nguồn để đối chiếu trang gốc.
   Mã: `src/consumer/service.py` (định tuyến), `insight.py` (tỷ số, xếp hạng), `growth.py` (tăng trưởng, cầu nối), `assess.py` (đánh giá).
 - **Phân tích (một mục, hai tab):** danh sách 12 doanh nghiệp luôn hiện, mặc định chọn đủ (có nút Chọn/Bỏ chọn tất cả) và dùng chung cho cả hai tab.
   *Xu hướng & so sánh:* xu hướng theo quý vẽ các doanh nghiệp trên cùng một biểu đồ nhiều đường kèm bảng doanh nghiệp × kỳ; "So sánh hai kỳ" cho thay đổi tuyệt đối và % từng doanh nghiệp; "So sánh cùng kỳ" vẽ cột; "Phân rã biến động" chỉ cho Vinamilk.
@@ -130,6 +131,7 @@ python tests/test_api.py           # cần pip install httpx
 python tests/test_consumer.py      # 12 công ty: tra cứu, so sánh, trả lời trong chat
 python tests/test_insight.py       # tỷ số, tăng trưởng, cầu nối lợi nhuận, đánh giá (có phép tính đối chiếu độc lập từ DuckDB)
 python tests/test_company_eval.py  # bộ đánh giá nhánh công ty và bộ chấm
+python tests/test_docqa.py          # hỏi đáp trên chữ PDF: có trích dẫn, không bịa, gợi ý câu hỏi tương tự, biểu đồ nhận mọi chỉ tiêu trong danh mục
 python eval/retrieval_check.py
 ```
 

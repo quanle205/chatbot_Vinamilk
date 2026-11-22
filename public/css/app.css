@@ -222,6 +222,8 @@
   .company-options { max-height:240px; overflow:auto; padding:6px; border:1px solid var(--line); border-radius:10px; background:var(--card); }
   .form-row .company-options label { flex-direction:row; align-items:center; gap:8px; padding:5px; color:var(--ink); }
   .out-card { border:1px solid var(--line); border-radius:16px; padding:14px 16px; background:var(--card); white-space:pre-wrap; overflow-wrap:anywhere; }
+  .suggest { margin:10px 0 4px; }
+  .suggest .note { margin:0 0 6px; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
   .chip { padding:5px 12px; border:1px solid var(--line); background:var(--card); border-radius:999px; font-size:var(--fs-sm); }
   .chip:hover { background:var(--soft); }
@@ -318,8 +320,20 @@
   .company-set { flex:1 1 100%; min-width:0; margin:0; padding:8px 12px 10px; border:1px solid var(--line); border-radius:12px; }
   .company-set legend { padding:0 6px; font-size:var(--fs-sm); color:var(--mute); }
   .company-actions { display:flex; gap:8px; margin-bottom:8px; }
-  .company-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:4px 12px; }
-  .form-row .company-grid label { flex-direction:row; align-items:center; gap:8px; color:var(--ink); font-size:var(--fs-sm); }
+  .company-grid { display:flex; flex-wrap:wrap; gap:8px; }
+  .pill-grid { display:flex; flex-wrap:wrap; gap:8px; }
+  .pill { position:relative; display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border:1px solid var(--line); border-radius:999px; background:var(--bg); color:var(--mute); font-size:var(--fs-sm); cursor:pointer; user-select:none; }
+  .form-row label.pill { flex-direction:row; }
+  .pill input { position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:pointer; }
+  .pill small { color:var(--mute); font-size:var(--fs-xs); }
+  .pill:hover { background:var(--soft); }
+  .pill:has(input:checked) { background:var(--tint); border-color:var(--accent); color:var(--ink); font-weight:600; }
+  .pill:has(input:checked) .pn::before { content:"✓ "; color:var(--accent); }
+  .pill:has(input:focus-visible) { outline:2px solid var(--focus); outline-offset:2px; }
+  .pill.is-base, .pill:has(input:disabled) { opacity:.45; cursor:not-allowed; }
+  .company-picker summary { line-height:1.4; }
+  .company-picker.has-value summary { border-color:var(--accent); }
+  .company-picker .company-options { max-height:none; margin-top:6px; }
   .tabs { display:flex; gap:6px; margin:4px 0 12px; border-bottom:1px solid var(--line); }
   .tab { padding:9px 16px; border:0; border-bottom:3px solid transparent; background:none; color:var(--mute); font:inherit; font-weight:600; cursor:pointer; }
   .tab[aria-selected="true"] { color:var(--accent); border-bottom-color:var(--accent); }

@@ -94,6 +94,8 @@ def ask(body: AskBody, request: Request):
         if service.out_of_scope(body.question, follow_up=bool(body.history or body.company)):   # giá cổ phiếu, tư vấn đầu tư...: nhánh tra cứu công ty cũng phải từ chối
             return service.result("Mình chỉ trả lời về số liệu và nội dung trong báo cáo tài chính của các công ty trong danh mục; không trả lời về giá cổ phiếu, dự báo hay tư vấn đầu tư.")
         return service.answer_question(body.question, companies, body.company_period, context)
+    if service.wants_document(catalog.fold(body.question.split("\n(Nếu không nêu kỳ,", 1)[0]), strict=True):   # người, hồ sơ công ty, hoạt động của Vinamilk: tra chữ trong PDF
+        return service.document_answer(body.question, [], True)
     gap = service.vinamilk_period_gap(body.question)          # kỳ ngoài dữ liệu của Vinamilk: trả lời tức thì
     if gap:
         return gap
@@ -181,7 +183,7 @@ def chart(body: ChartBody, request: Request):
     if body.mode == "companies" or companies not in ([], ["VNM"]):
         if not companies or any(code not in analytics.COMPANIES for code in companies):
             raise HTTPException(422, "Mã doanh nghiệp chưa được hỗ trợ.")
-        if body.mode == "explain" or any(m not in catalog.METRICS for m in body.metrics):
+        if body.mode == "explain" or any(m not in catalog.ALL_METRICS for m in body.metrics):
             raise HTTPException(422, "Kiểu phân tích hoặc chỉ tiêu chưa được hỗ trợ cho lựa chọn này.")
         if body.mode == "companies" and len(companies) < 2:
             raise HTTPException(422, "Chọn ít nhất hai doanh nghiệp để so sánh.")

@@ -79,8 +79,8 @@ def chart(companies, metrics, mode, period, basis, kind, analyst):
 
     blocks = []
     for metric in metrics:
-        name = catalog.METRICS[metric][0]
-        if metric not in {"tong_tai_san", "no_phai_tra", "von_chu_so_huu", "hang_ton_kho"} and not (period or "").startswith("FY"):
+        name = catalog.ALL_METRICS[metric][0]
+        if metric not in catalog.POINT_METRICS and not (period or "").startswith("FY"):
             name += " (lũy kế)" if basis == "luy_ke" else " (riêng quý)"
         if len(companies) > 1 and mode in {"series", "growth"}:
             blocks.append(matrix(metric, name))

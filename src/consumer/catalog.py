@@ -37,6 +37,7 @@ EXTRA_METRICS = {
     "gia_von": ("Giá vốn hàng bán", ("gia von",)),
 }
 ALL_METRICS = {**METRICS, **EXTRA_METRICS}
+POINT_METRICS = {"tong_tai_san", "no_phai_tra", "von_chu_so_huu", "hang_ton_kho", "tai_san_ngan_han", "tai_san_dai_han", "no_ngan_han", "no_dai_han"}   # số dư cuối kỳ (không có riêng quý/lũy kế)
 PERIODS = {
     "FY2025": "Năm 2025",
     "FY2024-2025": "Niên độ 2024–2025",

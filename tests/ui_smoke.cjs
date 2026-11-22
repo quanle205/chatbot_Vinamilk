@@ -33,7 +33,7 @@ async function contrast(page) {
     await page.locator('#new-chat').hover();
     assert.deepEqual(await contrast(page),[],`${theme}: hover contrast`);
     await page.locator('[data-view="lookup"]').click();
-    await page.locator('#lookup-form button').click();
+    await page.locator('#lookup-form button[type=submit]').click();
     await page.waitForFunction(()=>document.getElementById('lk-out').textContent.includes('16.') || document.getElementById('lk-out').textContent.includes('đồng'));
     assert.deepEqual(await contrast(page),[],`${theme}: lookup contrast`);
     await page.locator('[data-view="trends"]').click();
