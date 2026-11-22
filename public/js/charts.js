@@ -93,7 +93,7 @@ function drawChart(box, b, before) {
 export function chartsEl(blocks) {
   if (!blocks || !blocks.length) return null;
   return h("div", { class: "charts" }, blocks.map(b => {
-    const table = tableEl(b), box = h("div", { class: "chartbox" }, h("h3", { text: b.title }), summaryEl(b), table);
+    const table = b.no_table ? null : tableEl(b), box = h("div", { class: "chartbox" }, h("h3", { text: b.title }), summaryEl(b), table);      // no_table: bảng đã có trong câu trả lời
     if (b.chart && (b.kind === "matrix" || b.rows.length >= 2)) drawChart(box, b, table);
     return box;
   }));

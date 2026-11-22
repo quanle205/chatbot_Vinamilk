@@ -2,7 +2,7 @@
 import re
 from difflib import SequenceMatcher
 
-from src.consumer import insight, repository
+from src.consumer import growth, insight, repository
 from src.consumer.catalog import COMPANIES, METRICS, PERIODS, fold
 from src.rag.text import ROMAN, find_periods, fmt_ty, fmt_vnd
 
@@ -445,6 +445,7 @@ def series(companies, with_vinamilk, metrics, basis="quy"):
     codes = (["VNM"] if with_vinamilk else []) + list(companies)
     quarters = [p for p in PERIODS if p.startswith("Q")]
     texts, sources, empty, mixed = [], {}, [], {}
+    shown_codes, off_scope = [], set()                         # off_scope: (mã, kỳ) là báo cáo riêng trong chuỗi chủ yếu hợp nhất, không vẽ lên biểu đồ
     for metric in metrics:
         table = {p: {code: entity_values(code, p, [metric], basis) for code in codes} for p in quarters}
         shown = [code for code in codes if any(metric in table[p][code][0] for p in quarters)]
@@ -454,6 +455,8 @@ def series(companies, with_vinamilk, metrics, basis="quy"):
             # Công ty có báo cáo hợp nhất nhưng vài quý số lấy từ báo cáo riêng (BHN Q1/2025): không cộng, so sánh trực tiếp được.
             if separate and len(separate) < len(scopes) and code != "VNM" and repository.has_consolidated(code):
                 mixed[code] = f"{entity_name(code)}: {', '.join(separate)} là báo cáo riêng"
+                off_scope.update((code, p) for p in separate)
+        shown_codes += [code for code in shown if code not in shown_codes]
         empty += [entity_name(code) for code in codes if code not in shown]
         if not shown:
             continue
@@ -476,7 +479,30 @@ def series(companies, with_vinamilk, metrics, basis="quy"):
         notes.append(f"Chưa có số đã đối chiếu theo quý của: {', '.join(dict.fromkeys(empty))}.")
     if not texts:
         return result("Chưa có số đã đối chiếu theo quý cho lựa chọn này.", [], notes)
-    return result("\n\n".join(texts), list(sources.values()), notes)
+    reply = result("\n\n".join(texts), list(sources.values()), notes)
+    reply["charts"] = _series_charts(shown_codes or codes, list(metrics), basis, off_scope)
+    return reply
+
+
+def _series_charts(codes, metrics, basis, off_scope=()):
+    """Biểu đồ xu hướng cho khung chat (cùng khối dữ liệu với màn hình Phân tích); bảng đã có trong câu trả lời nên không in lại.
+
+    Điểm thuộc `off_scope` (báo cáo riêng lẫn trong chuỗi hợp nhất, vd Habeco Q1/2025) bị bỏ khỏi đường vẽ để không tạo bước nhảy giả."""
+    try:
+        from src.consumer import analytics
+        from src.tools.registry import analyst
+        blocks = analytics.chart(list(codes), [m for m in metrics if m in METRICS], "series", None, basis, "yoy", analyst())
+    except Exception:                                           # noqa: BLE001 - biểu đồ chỉ là phần thêm, không được làm hỏng câu trả lời
+        return []
+    for block in blocks:
+        block["no_table"] = True
+        for row in block.get("rows", []):
+            for code in {c for c, _ in off_scope}:
+                if str(row.get("label", "")).endswith(f"({code})"):
+                    for cell in row.get("cells", []):
+                        if (code, cell.get("period")) in off_scope:
+                            cell["value"] = None
+    return blocks
 
 
 def ratio_answer(companies, period, basis="quy"):
@@ -555,6 +581,131 @@ def _comparison_text(period, entities, metrics=COMPARE_METRICS, asked_ratios=())
     return "\n".join(lines + notes)
 
 
+def _quarters():
+    return [p for p in reversed(PERIODS) if p.startswith("Q")]
+
+
+def _comparison_periods(query, requested, codes, metrics, basis):
+    """(kỳ gốc, kỳ hiện tại, cách so sánh, ghi chú, hàm nạp số) cho câu hỏi tăng trưởng / vì sao."""
+    cache = {}
+
+    def values(code, period):
+        if (code, period) not in cache:
+            cache[code, period] = entity_values(code, period, metrics, basis)
+        return cache[code, period]
+
+    def both(base, cur):
+        return sum(1 for code in codes if any(m in values(code, base)[0] and m in values(code, cur)[0] for m in metrics))
+
+    def best_current():
+        scored = [(both(growth.last_year(p), p), -i, p) for i, p in enumerate(_quarters()) if growth.last_year(p) in PERIODS]
+        scored = [x for x in scored if x[0] > 0]
+        return max(scored)[2] if scored else None
+
+    base, cur, kind, guessed = growth.pick_periods(query, requested, best_current)
+    notes = []
+    if cur is None or base not in PERIODS or cur not in PERIODS:
+        return base, cur, kind, notes, values
+    if guessed and kind == "yoy" and both(base, cur) == 0:
+        alt = growth.prev_quarter(cur)                          # không nói rõ cách so sánh mà cùng kỳ năm trước chưa có số: thử quý liền trước
+        if alt in PERIODS and both(alt, cur) > 0:
+            notes.append(f"Chưa có số {base} nên so với quý liền trước ({alt}).")
+            return alt, cur, "qoq", notes, values
+    if guessed and kind == "yoy":
+        notes.append('Câu hỏi không nêu cách so sánh nên mặc định so với cùng kỳ năm trước; hỏi "so với quý trước" để đổi.')
+    return base, cur, kind, notes, values
+
+
+def _same_scope(code, a, b):
+    """Hai kỳ so sánh được khi cùng phạm vi. Báo cáo riêng không so với báo cáo hợp nhất hay báo cáo không ghi rõ phạm vi (vd Habeco Q1/2025 riêng),
+    trừ công ty không có báo cáo hợp nhất nào (vd Mộc Châu Milk): khi đó mọi kỳ đều là báo cáo riêng."""
+    if a == b or "riêng" not in (a, b):
+        return True
+    return code != "VNM" and not repository.has_consolidated(code)
+
+
+def growth_answer(question, companies, with_vinamilk, basis="quy"):
+    """Tăng giảm (tuyệt đối và %) của chỉ tiêu giữa hai kỳ, cho một hay nhiều doanh nghiệp (kể cả Vinamilk)."""
+    query = fold(question)
+    codes = (["VNM"] if with_vinamilk else []) + list(companies)
+    metrics = [m for m in METRICS if m in question_metrics(query)] or list(growth.DEFAULT_METRICS)
+    requested = requested_periods(question)
+    if requested and all(p.startswith("FY") for p in requested):
+        return result("Tăng trưởng cả năm chưa tính được vì báo cáo năm trong dữ liệu chỉ có số của năm hiện tại. "
+                      'Bạn hỏi theo quý, ví dụ "doanh thu của KIDO quý 2/2026 so với cùng kỳ năm trước".')
+    base, cur, kind, notes, values = _comparison_periods(query, requested, codes, metrics, basis)
+    if cur is None or base not in PERIODS or cur not in PERIODS:
+        gone = base if base and base not in PERIODS else cur
+        return result(f"Chưa có số của {gone or 'kỳ được hỏi'} để so sánh. Các công ty có quý từ Q1/2025 đến Q3/2026 (tùy công ty); "
+                      "bạn thử nêu quý có số, ví dụ Q2/2026 so với cùng kỳ năm trước.")
+    texts, sources, lacking = [], {}, {}
+    for metric in metrics:
+        rows = []
+        for code in codes:
+            vb, sb, scb = values(code, base)
+            vc, sc, scc = values(code, cur)
+            if metric in vb and metric in vc:
+                rows.append((entity_name(code), vb[metric], vc[metric], _same_scope(code, scb, scc)))
+                for src in (*sb, *sc):
+                    sources[(src.get("doc"), src.get("page"))] = src
+            else:
+                lacking.setdefault(code, []).append(PERIODS[base] if metric not in vb else PERIODS[cur])
+        if not rows:
+            continue
+        rows.sort(key=lambda r: (r[3], ((r[2] - r[1]) / r[1]) if r[1] > 0 else float("-inf")), reverse=True)      # so sánh được trước, rồi theo % giảm dần
+        texts.append(growth.growth_text(metric, PERIODS[base], PERIODS[cur], rows, kind))
+        if any(not r[3] for r in rows):
+            notes.append("Một số doanh nghiệp có hai kỳ khác phạm vi báo cáo (hợp nhất/riêng) nên không tính phần trăm.")
+    if not texts:
+        return result(f"Chưa có số đã đối chiếu của {PERIODS[base]} và {PERIODS[cur]} cho các doanh nghiệp được hỏi, nên chưa tính được tăng trưởng.",
+                      [s for code in codes if code != "VNM" for s in report_sources(code, cur)[:1]], notes)
+    if lacking:
+        texts.append("**Chưa so sánh được:** " + "; ".join(f"{entity_name(code)} (thiếu số {', '.join(dict.fromkeys(ps))})" for code, ps in lacking.items()) + ".")
+    return result("\n\n".join(texts), list(sources.values()), list(dict.fromkeys(notes)))
+
+
+def why_answer(question, companies, with_vinamilk, basis="quy"):
+    """"Vì sao lợi nhuận đổi": cầu nối lợi nhuận giữa hai kỳ (doanh thu, biên gộp, chi phí khác, thuế), tổng đúng bằng chênh lệch."""
+    query = fold(question)
+    codes = (["VNM"] if with_vinamilk else []) + list(companies)
+    asked = question_metrics(query)
+    profit_question = bool(asked & {"loi_nhuan_gop", "loi_nhuan_truoc_thue", "loi_nhuan_sau_thue"}) or matches(query, ("loi nhuan", "lai", "lo"))
+    if not profit_question:                                     # chỉ hỏi vì sao doanh thu/tài sản đổi: dữ liệu không có sản lượng, giá nên chỉ nêu mức thay đổi
+        reply = growth_answer(question, companies, with_vinamilk, basis)
+        reply["notes"] = [*reply["notes"], "Dữ liệu báo cáo không có sản lượng, giá bán hay cơ cấu sản phẩm nên không giải thích được nguyên nhân thay đổi này; chỉ nêu mức thay đổi."]
+        return reply
+    if len(codes) > 3:
+        return result('Phân tích "vì sao" làm cho tối đa 3 doanh nghiệp mỗi lần. Bạn nêu cụ thể 1-3 công ty, ví dụ "vì sao lợi nhuận KIDO quý 2/2026 giảm".')
+    target = "loi_nhuan_gop" if "loi_nhuan_gop" in asked else "loi_nhuan_truoc_thue" if "loi_nhuan_truoc_thue" in asked else "loi_nhuan_sau_thue"
+    metrics = ["doanh_thu_thuan", "loi_nhuan_gop", "loi_nhuan_truoc_thue", "loi_nhuan_sau_thue"]
+    requested = requested_periods(question)
+    if requested and all(p.startswith("FY") for p in requested):
+        return result('Phân tích theo năm chưa làm được vì báo cáo năm chỉ có số của năm hiện tại. Bạn hỏi theo quý, ví dụ "vì sao lợi nhuận KIDO quý 2/2026 thay đổi".')
+    base, cur, kind, notes, values = _comparison_periods(query, requested, codes, metrics, basis)
+    if cur is None or base not in PERIODS or cur not in PERIODS:
+        return result("Chưa có hai kỳ có số để so sánh (cần ít nhất doanh thu, lợi nhuận gộp và lợi nhuận). Bạn thử nêu quý có số, ví dụ Q2/2026.")
+    texts, sources, lacking = [], {}, []
+    for code in codes:
+        vb, sb, scb = values(code, base)
+        vc, sc, scc = values(code, cur)
+        if not _same_scope(code, scb, scc):
+            lacking.append(f"{entity_name(code)} ({PERIODS[base]} và {PERIODS[cur]} khác phạm vi báo cáo)")
+            continue
+        text, level = growth.bridge_text(entity_name(code), PERIODS[base], PERIODS[cur], vb, vc, target)
+        if level is None:
+            lacking.append(f"{entity_name(code)} (thiếu số {PERIODS[base]} hoặc {PERIODS[cur]})")
+            continue
+        texts.append(text)
+        for src in (*sb, *sc):
+            sources[(src.get("doc"), src.get("page"))] = src
+    if not texts:
+        return result(f"Chưa đủ số đã đối chiếu của {PERIODS[base]} và {PERIODS[cur]} (cần doanh thu và lợi nhuận gộp ở cả hai kỳ) để phân tích cho {', '.join(lacking)}.", [], notes)
+    if lacking:
+        texts.append(f"**Chưa phân tích được:** {', '.join(lacking)}.")
+    notes.append("Đây là phân rã số học từ báo cáo kết quả kinh doanh (tổng các khoản mục bằng đúng chênh lệch); dữ liệu không cho biết nguyên nhân kinh doanh như giá nguyên liệu hay chiến dịch bán hàng.")
+    return result("\n\n".join(texts), list(sources.values()), list(dict.fromkeys(notes)))
+
+
 def report_sources(company, period):
     return [repository.source(company, p, "PDF", 1, url, section)
             for p, url, section in repository.documents(company, period)]
@@ -584,6 +735,11 @@ def answer_question(question, companies, selected_period=None, context=None):
     basis = "luy_ke" if matches(query, ("luy ke", "6 thang", "9 thang")) else "quy"
     if matches(query, SERIES_WORDS) and not requested_periods(question) and not matches(query, ("thuyet minh",)):
         return series(companies, with_vinamilk, [m for m in METRICS if m in question_metrics(query)] or ["doanh_thu_thuan", "loi_nhuan_sau_thue"], basis)
+    if not matches(query, ("thuyet minh",)):
+        if growth.asked_why(query):
+            return why_answer(question, companies, with_vinamilk, basis)
+        if growth.asked_growth(query):
+            return growth_answer(question, companies, with_vinamilk, basis)
     comparing = len(companies) + with_vinamilk >= 2 and matches(query, COMPARE_WORDS)
     no_period = not requested_periods(question) and not selected_period       # không nêu kỳ: để bảng so sánh tự chọn kỳ cả hai bên cùng có số
     if with_vinamilk or len(companies) > 2 or (comparing and (no_period or not question_metrics(query))):
@@ -647,10 +803,10 @@ def answer_for_period(query, companies, period):
     basis = "luy_ke" if matches(query, ("luy ke", "6 thang", "9 thang")) else "quy"
     if matches(query, RATIO_WORDS):
         return ratio_answer(companies, period, basis)
-    if matches(query, ("ty le", "tang truong", "bao nhieu phan tram", "vi sao", "tai sao",
-                       "cong ty me", "co dong thieu so", "co dong khong kiem soat", "du bao", "du doan")) or "%" in query:
-        return result("Với các doanh nghiệp ngoài Vinamilk, mình tra được số của từng chỉ tiêu, biên lợi nhuận, mức nợ, số qua các quý và so sánh giữa các doanh nghiệp. "
-                      "Tăng trưởng, nguyên nhân biến động và dự báo thì chưa hỗ trợ. Bạn có thể hỏi, ví dụ: \"doanh thu của KIDO qua các quý\".")
+    if matches(query, ("ty le", "cong ty me", "co dong thieu so", "co dong khong kiem soat", "du bao", "du doan")):
+        return result("Với các doanh nghiệp ngoài Vinamilk, mình tra được số của từng chỉ tiêu, biên lợi nhuận, mức nợ, tăng trưởng giữa hai kỳ, "
+                      "phân rã vì sao lợi nhuận đổi, số qua các quý và so sánh giữa các doanh nghiệp. Lợi nhuận của cổ đông công ty mẹ hay cổ đông không kiểm soát "
+                      "và dự báo thì chưa hỗ trợ. Bạn có thể hỏi, ví dụ: " + '"doanh thu của KIDO qua các quý" hoặc "vì sao lợi nhuận KIDO quý 2/2026 thay đổi".')
     replies = [lookup(companies, metric, period, basis) for metric in METRICS if metric in metrics]
     sources = {s["url"]: s for reply in replies for s in reply["sources"]}
     notes = list(dict.fromkeys(n for reply in replies for n in reply["notes"]))
