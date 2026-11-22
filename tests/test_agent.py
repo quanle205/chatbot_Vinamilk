@@ -6,6 +6,7 @@ việc đó cần khóa GEMINI_API_KEY thật.
 """
 import os
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace as NS
 
@@ -13,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from google.genai import types  # noqa: E402
 
-from src.agent.agent import REFUSAL_TEXT, AgentConfigError, ToolCall, VinamilkAgent, _clean_schema, make_client  # noqa: E402
+from src.agent.agent import QUICK_TIMEOUT_MS, REFUSAL_TEXT, AgentConfigError, ToolCall, VinamilkAgent, _clean_schema, make_client  # noqa: E402
 from src.agent.answer import tidy_answer, used_sources  # noqa: E402
 from src.agent.guard import find_unsupported_numbers, numbers_in_text  # noqa: E402
 from src.agent.prompts import SYSTEM_PROMPT  # noqa: E402
@@ -184,11 +185,39 @@ def test_transient_server_errors_are_retried():
 
 
 def test_falls_back_to_next_model_when_primary_is_overloaded():
-    script = [HttpError(503)] * 3 + [resp([text("Từ mô hình dự phòng.")])]               # chính: 1 + 2 lần thử rồi bỏ
+    script = [HttpError(503), resp([text("Từ mô hình dự phòng.")])]                      # 503 + còn mô hình khác: đổi ngay, không chờ thử lại
     a = agent(script, model="chinh", fallback_models=("du-phong",), retry_delays=(0, 0))
     r = a.ask("q")
     assert r.answer == "Từ mô hình dự phòng." and r.model == "du-phong"
-    assert [c["model"] for c in a.client.calls] == ["chinh", "chinh", "chinh", "du-phong"]
+    assert [c["model"] for c in a.client.calls] == ["chinh", "du-phong"]
+    assert a._cooldown["chinh"] - time.monotonic() <= 90                                 # quá tải: mô hình chính chỉ nghỉ ngắn (không phải 5 phút như hết hạn mức)
+
+
+def test_models_with_a_fallback_available_get_a_short_timeout_but_the_last_one_gets_the_full_timeout():
+    class Hang(Exception):
+        code = 504
+
+    a = agent([Hang("treo"), Hang("treo"), resp([text("ok")])], model="a", fallback_models=("b", "c"), retry_delays=(0, 0))
+    a.ask("q")
+    timeouts = [getattr(c["config"].http_options, "timeout", None) for c in a.client.calls]
+    assert [c["model"] for c in a.client.calls] == ["a", "b", "c"]
+    assert timeouts[0] == timeouts[1] == QUICK_TIMEOUT_MS and timeouts[2] is None           # mô hình cuối giữ thời hạn mặc định của client
+    pinned = agent([resp([text("ok")])], model="a", fallback_models=("b",))
+    pinned._generate([], "a")
+    assert getattr(pinned.client.calls[0]["config"].http_options, "timeout", None) is None   # đã ghim giữa vòng công cụ: không rút ngắn
+
+
+def test_last_model_is_still_retried_and_pinned_model_is_never_switched():
+    a = agent([HttpError(503), HttpError(503), resp([text("ok")])], model="chinh", fallback_models=("du-phong",), retry_delays=(0, 0))
+    a._cooldown["chinh"] = time.monotonic() + 1000                                       # mô hình chính đang nghỉ: du-phong là mô hình cuối, vẫn được thử lại
+    assert a.ask("q").model == "du-phong" and [c["model"] for c in a.client.calls] == ["du-phong"] * 3
+    b = agent([HttpError(503)] * 3, model="chinh", fallback_models=("du-phong",), retry_delays=(0, 0))
+    try:
+        b._generate([], "chinh")                                                        # đã ghim (giữa vòng công cụ): chỉ thử lại đúng mô hình đó rồi ném lỗi
+        raise AssertionError("phải ném lỗi")
+    except HttpError:
+        pass
+    assert [c["model"] for c in b.client.calls] == ["chinh"] * 3
 
 
 def test_quota_or_missing_model_falls_through_but_bad_request_does_not():
@@ -210,12 +239,12 @@ def test_quota_or_missing_model_falls_through_but_bad_request_does_not():
 
 
 def test_model_is_pinned_within_one_question_and_failed_model_rests_for_the_next():
-    script = [HttpError(503)] * 3 + [resp([call("get_metric", metric="tong tai san", period="Q1/2026")]),
+    script = [HttpError(503)] + [resp([call("get_metric", metric="tong tai san", period="Q1/2026")]),
                                      resp([text("Xong.")]),                               # bước 2 vẫn phải là "du-phong"
                                      resp([text("Câu sau.")])]                           # mô hình chính vừa hỏng nên nghỉ vài phút, câu sau dùng dự phòng
     a = agent(script, model="chinh", fallback_models=("du-phong",), retry_delays=(0, 0))
     a.ask("q1", hist := [])
-    assert [c["model"] for c in a.client.calls] == ["chinh", "chinh", "chinh", "du-phong", "du-phong"]
+    assert [c["model"] for c in a.client.calls] == ["chinh", "du-phong", "du-phong"]
     a.ask("q2", hist)
     assert a.client.calls[-1]["model"] == "du-phong" and a.client.calls[-1]["n_contents"] == 3
 

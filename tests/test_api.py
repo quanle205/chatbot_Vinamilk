@@ -129,7 +129,7 @@ def test_comparison_and_breakdown_tables_come_from_tool_results():
     c = d["charts"][0]
     assert c["kind"] == "comparison" and c["chart"] is False and [r["label"] for r in c["rows"]] == ["quý 1/2026", "quý 1/2025"]
     assert c["change"] == c["rows"][0]["value"] - c["rows"][1]["value"]
-    d = _ask([resp([call("explain_change", metric="lợi nhuận sau thuế", period="Q2/2026")]), resp([text("Doanh thu thuần là yếu tố chính.")])], "Vì sao lợi nhuận Q2/2026 tăng?")
+    d = _ask([resp([call("explain_change", metric="lợi nhuận sau thuế", period="Q2/2026")]), resp([text("Doanh thu thuần là yếu tố chính.")])], "Phân rã mức đóng góp vào thay đổi lợi nhuận Q2/2026")
     c = d["charts"][0]
     assert c["kind"] == "breakdown" and c["chart"] is False and sum(r["value"] for r in c["rows"]) == c["change"]
     d = _ask([resp([call("get_series", metric="doanh thu thuần"), call("get_series", metric="doanh thu thuần")]), resp([text("ok")])], "Xu hướng doanh thu?")

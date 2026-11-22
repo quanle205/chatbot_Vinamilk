@@ -140,6 +140,40 @@ def test_small_changes_are_not_called_improving_or_worsening():
     assert "ít thay đổi so với kỳ trước" in text and "đang xấu đi" not in text and "đang cải thiện" not in text
 
 
+def test_growth_why_and_trend_questions_are_not_mistaken_for_assessment():
+    from src.consumer import assess
+    for query in ("loi nhuan sau thue q2 2026 tang giam the nao so voi cung ky", "vi sao loi nhuan kido the nao",
+                  "loi nhuan vinamilk co xu huong the nao", "doanh thu tang bao nhieu phan tram"):
+        assert assess.asked_assessment(query) is None, query
+    ASK_LIMIT.reset()
+    response = client.post("/api/ask", json={"question": "Lợi nhuận sau thuế Q2/2026 tăng giảm thế nào so với cùng kỳ?"})
+    assert response.status_code == 503                                                       # chuyển cho trợ lý (môi trường test không có khóa), không bị trả bảng đánh giá
+
+
+def test_vinamilk_why_uses_the_deterministic_profit_bridge():
+    reply = ask("Vì sao lợi nhuận sau thuế quý 2/2026 thay đổi so với quý 1/2026?")           # không cần khóa Gemini
+    answer = reply["answer"]
+    assert answer.startswith("**Lợi nhuận sau thuế Q2/2026 của Vinamilk** tăng 726,2 tỷ đồng so với Q1/2026"), answer
+    assert "Tổng thay đổi lợi nhuận sau thuế** | **+726,2** | tăng" in answer and "Thuế thu nhập doanh nghiệp" in answer
+    parts = re.findall(r"\| (?:Doanh thu|Biên|Chi phí|Thuế)[^|]*\| ([+-][\d.,]+) \|", answer)
+    to_float = lambda text: float(text.replace(".", "").replace(",", "."))      # noqa: E731
+    assert len(parts) == 4 and abs(sum(map(to_float, parts)) - 726.2) < 0.25, parts           # các khoản mục cộng lại bằng chênh lệch (sai số do làm tròn từng dòng)
+    assert reply["sources"] and any("không cho biết nguyên nhân kinh doanh" in n for n in reply["notes"])
+
+
+def test_vinamilk_question_about_a_period_without_data_is_answered_instantly_without_gemini():
+    import os
+    assert not os.environ.get("GEMINI_API_KEY")                                              # môi trường test không có khóa: nếu gọi Gemini sẽ là 503
+    for question in ("Doanh thu quý 3/2026 của Vinamilk là bao nhiêu?", "Lợi nhuận Vinamilk năm 2024", "Vinamilk quý 1/2024 thế nào?"):
+        ASK_LIMIT.reset()
+        response = client.post("/api/ask", json={"question": question})
+        assert response.status_code == 200, (question, response.status_code)
+        assert "Chưa có báo cáo" in response.json()["answer"] and "Q1/2025 đến Q2/2026" in response.json()["answer"], response.json()["answer"]
+    for question in ("Doanh thu Vinamilk quý 2/2026 và quý 3/2026", "Doanh thu Vinamilk năm 2025"):
+        ASK_LIMIT.reset()                                                                    # có ít nhất một kỳ có dữ liệu: không chặn, để trợ lý trả lời
+        assert client.post("/api/ask", json={"question": question}).status_code == 503
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted(globals().items()):

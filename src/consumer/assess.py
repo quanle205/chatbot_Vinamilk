@@ -8,6 +8,7 @@ from __future__ import annotations
 from math import ceil
 from statistics import median
 
+from src.consumer.growth import asked_growth, asked_why
 from src.consumer.insight import RATIOS, _has, pct, points, ratio_of
 
 PROFIT_WORDS = ("sinh loi", "loi nhuan", "lai", "hieu qua", "bien", "kinh doanh", "lam an", "co lai")
@@ -16,6 +17,7 @@ GENERAL_WORDS = ("tinh hinh tai chinh", "suc khoe tai chinh", "tai chinh co tot"
 EVAL_CUES = ("tot khong", "co tot", "tot hay", "tot chua", "kha quan", "hieu qua khong", "co hieu qua", "kha nang", "an toan", "rui ro",
              "on dinh", "suc khoe", "manh khong", "yeu khong", "danh gia", "nhan xet", "nhu the nao", "the nao", "ra sao", "co on",
              "co cao khong", "co thap khong", "co lanh manh", "co kha")
+TREND_WORDS = ("xu huong", "qua cac quy", "cac quy", "theo quy", "dien bien", "qua cac ky")
 TOPICS = {"profit": ("bien_gop", "bien_rong"), "leverage": ("no_von", "no_ts"), "general": ("bien_gop", "bien_rong", "no_von", "no_ts")}
 SUBJECT = {"profit": "khả năng sinh lời", "leverage": "mức nợ và độ an toàn tài chính", "general": "tình hình tài chính"}
 MIN_PEERS = 4                                               # ít hơn: không xếp hạng, chỉ so với kỳ trước
@@ -24,8 +26,8 @@ MATERIAL_CHANGE = 0.01                                      # từ 1 điểm ph�
 
 def asked_assessment(query: str):
     """"profit" / "leverage" / "general" nếu là câu hỏi đánh giá (có tín hiệu đánh giá và chủ đề); None nếu là câu hỏi số liệu thường."""
-    if not _has(query, EVAL_CUES):
-        return None
+    if not _has(query, EVAL_CUES) or asked_growth(query) or asked_why(query) or _has(query, TREND_WORDS):
+        return None                                         # "tăng giảm thế nào", "vì sao", "xu hướng thế nào" là câu hỏi tăng trưởng/giải thích/xu hướng
     if _has(query, GENERAL_WORDS):
         return "general"
     profit, leverage = _has(query, PROFIT_WORDS), _has(query, LEVERAGE_WORDS)

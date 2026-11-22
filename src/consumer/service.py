@@ -43,6 +43,25 @@ def asks_all(query):
     return matches(query, ALL_WORDS) and not matches(query, ("cong ty con", "cong ty lien ket", "cong ty me"))
 
 
+def vinamilk_period_gap(question):
+    """Câu hỏi về Vinamilk nêu kỳ mà Vinamilk chưa có báo cáo (vd Q3/2026, năm 2024): trả lời ngay, không phải chờ Gemini mới biết "không có dữ liệu"."""
+    question = question.split("\n(Nếu không nêu kỳ,", 1)[0]            # giao diện nối kỳ mặc định; đó không phải kỳ người dùng hỏi
+    asked = requested_periods(question)
+    covered = [p for p in asked if (p in VNM_QUARTERS if p.startswith("Q") else p[2:6] in ("2025", "2026"))]
+    if not asked or covered:
+        return None
+    missing = ", ".join(p.replace("FY", "năm ") for p in asked)
+    return result(f"Chưa có báo cáo {missing} của Vinamilk. Dữ liệu Vinamilk hiện có {len(VNM_QUARTERS)} quý báo cáo hợp nhất, từ {VNM_QUARTERS[0]} đến {VNM_QUARTERS[-1]}. "
+                  f"Bạn thử hỏi lại với {VNM_QUARTERS[-1]} (kỳ mới nhất) hoặc một quý trong khoảng trên.")
+
+
+def vinamilk_why(question):
+    """Câu "vì sao lợi nhuận Vinamilk đổi" (không nêu công ty khác): True để dùng cầu nối lợi nhuận xác định thay vì Gemini."""
+    query = fold(question)
+    return growth.asked_why(query) and not matches(query, OFF_TOPIC_WORDS) and (
+        bool(question_metrics(query) & {"loi_nhuan_gop", "loi_nhuan_truoc_thue", "loi_nhuan_sau_thue"}) or matches(query, ("loi nhuan", "lai", "lo")))
+
+
 def vinamilk_assessment(question):
     """Chủ đề ("profit"/"leverage"/"general") nếu đây là câu đánh giá về Vinamilk (không nêu công ty khác, không hỏi giá cổ phiếu), ngược lại None."""
     query = fold(question)

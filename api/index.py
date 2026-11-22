@@ -94,6 +94,11 @@ def ask(body: AskBody, request: Request):
         if service.out_of_scope(body.question, follow_up=bool(body.history or body.company)):   # giá cổ phiếu, tư vấn đầu tư...: nhánh tra cứu công ty cũng phải từ chối
             return service.result("Mình chỉ trả lời về số liệu và nội dung trong báo cáo tài chính của các công ty trong danh mục; không trả lời về giá cổ phiếu, dự báo hay tư vấn đầu tư.")
         return service.answer_question(body.question, companies, body.company_period, context)
+    gap = service.vinamilk_period_gap(body.question)          # kỳ ngoài dữ liệu của Vinamilk: trả lời tức thì
+    if gap:
+        return gap
+    if service.vinamilk_why(body.question):                   # "vì sao lợi nhuận đổi": cầu nối doanh thu - biên gộp - chi phí - thuế, tức thì và không phụ thuộc Gemini
+        return service.why_answer(body.question.split("\n(Nếu không nêu kỳ,", 1)[0], [], True)
     topic = service.vinamilk_assessment(body.question)       # "Vinamilk có khả năng thanh toán nợ tốt không?": đánh giá bằng số, không cần Gemini
     if topic:
         return service.assess_answer(body.question, [], True, topic)

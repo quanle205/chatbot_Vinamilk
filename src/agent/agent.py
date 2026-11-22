@@ -28,6 +28,8 @@ REFUSAL_TEXT = "Mình không thể trả lời câu hỏi này. Bạn có thể 
 TRANSIENT_CODES = {500, 503, 504}
 RETRY_CODES = {500, 503}                    # 504 = mô hình đã chờ quá lâu: thử lại chỉ tốn thêm thời gian, chuyển mô hình luôn
 COOLDOWN_S = 300                            # mô hình vừa hỏng/quá tải bị bỏ qua trong khoảng này để các câu sau không phải chờ lại
+QUICK_TIMEOUT_MS = int(os.environ.get("GEMINI_QUICK_TIMEOUT_MS", "10000"))   # lần thử khi còn mô hình dự phòng: mô hình chậm/treo bị bỏ sau ngần này thay vì chờ hết thời hạn đầy đủ
+COOLDOWN_BY_CODE = {500: 90, 503: 90, 504: 180}             # quá tải thường qua nhanh nên nghỉ ngắn hơn; hết hạn mức (429) hay không có quyền thì nghỉ lâu (COOLDOWN_S)
 FALLTHROUGH_CODES = TRANSIENT_CODES | {429, 403, 404}       # đổi sang mô hình dự phòng; 400 (yêu cầu sai) thì không
 DEFAULT_FALLBACKS = "gemini-3.6-flash,gemini-3.5-flash-lite"
 BLOCKED = {"SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "RECITATION", "IMAGE_SAFETY"}
@@ -56,7 +58,7 @@ def make_client():
     key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not key:
         raise AgentConfigError("Chưa đặt GEMINI_API_KEY (tạo khóa miễn phí tại aistudio.google.com/apikey).")
-    timeout_ms = int(os.environ.get("GEMINI_TIMEOUT_MS", "25000"))                 # không để một cuộc gọi treo vô hạn
+    timeout_ms = int(os.environ.get("GEMINI_TIMEOUT_MS", "20000"))                 # không để một cuộc gọi treo vô hạn
     return genai.Client(api_key=key, http_options=types.HttpOptions(timeout=timeout_ms))
 
 
@@ -143,20 +145,28 @@ class VinamilkAgent:
         first_error = None
         now = time.monotonic()
         ready = [m for m in self.models if self._cooldown.get(m, 0) <= now] or self.models
-        for model in ([pinned] if pinned else ready):
+        order = [pinned] if pinned else ready
+        for index, model in enumerate(order):
+            has_next = not pinned and index < len(order) - 1
+            # Còn mô hình dự phòng: chờ ngắn (mô hình treo tốn gần hết thời hạn mỗi lần). Mô hình cuối hoặc đang giữa vòng công cụ (không đổi được): chờ đủ.
+            config = self.config.model_copy(update={"http_options": types.HttpOptions(timeout=QUICK_TIMEOUT_MS)}) if has_next else self.config
             for delay in (*self.retry_delays, None):
                 if self._deadline is not None and time.monotonic() > self._deadline:
                     raise first_error or TimeoutError("Hết thời gian chờ mô hình")
                 try:
-                    return model, self.client.models.generate_content(model=model, contents=contents, config=self.config)
+                    return model, self.client.models.generate_content(model=model, contents=contents, config=config)
                 except Exception as e:                                     # noqa: BLE001 - lỗi khác được ném lại nguyên vẹn
                     code = getattr(e, "code", None)
                     first_error = first_error or e
-                    if code in RETRY_CODES and delay is not None:
+                    switch = code in FALLTHROUGH_CODES and not pinned
+                    if code in RETRY_CODES and has_next:                   # còn mô hình dự phòng: đổi ngay thay vì chờ và thử lại trên mô hình đang quá tải
+                        self._cooldown[model] = time.monotonic() + COOLDOWN_BY_CODE.get(code, COOLDOWN_S)
+                        break
+                    if code in RETRY_CODES and delay is not None:          # mô hình cuối, hoặc đang giữa vòng gọi công cụ (phải giữ đúng mô hình): thử lại
                         time.sleep(delay)
                         continue
-                    if code in FALLTHROUGH_CODES and not pinned:
-                        self._cooldown[model] = time.monotonic() + COOLDOWN_S
+                    if switch:
+                        self._cooldown[model] = time.monotonic() + COOLDOWN_BY_CODE.get(code, COOLDOWN_S)
                         break                                              # sang mô hình dự phòng
                     raise
         raise first_error
