@@ -220,6 +220,17 @@ def main():
     wide_ratio = client.post("/api/ask", json={"question": "Vinamilk so với KIDO về biên lợi nhuận gộp quý 2/2026"}).json()["answer"]
     assert "- **Biên lợi nhuận gộp:** Vinamilk 43,5%, KIDO 21,9%. Vinamilk cao hơn KIDO +21,6 điểm %." in wide_ratio
     assert "| Biên lợi nhuận trước thuế | 20,7% | 2,8% |" in wide_ratio and "| Dẫn đầu |" in wide_ratio
+    # Chưa có số đã đối chiếu: không in lại chữ OCR thô (số không nhãn cột dễ bị đọc nhầm là số quý), chỉ chỉ trang nguồn
+    import re as _re
+    for q in ("Doanh thu Sabeco quý 2/2025", "So sánh doanh thu và lợi nhuận sau thuế Q2/2026 của KIDO và Masan Consumer",
+              "Tình hình tài chính của Sabeco quý 3/2025"):
+        ASK_LIMIT.reset()
+        reply = client.post("/api/ask", json={"question": q}).json()
+        assert not _re.search(r"\d{1,3}(,\d{3}){3,}", reply["answer"]), reply["answer"]          # số OCR viết bằng dấu phẩy ("12,615,062,955,827")
+        assert "Doanh thu thuan" not in reply["answer"] and "thuån" not in reply["answer"], reply["answer"]
+    ASK_LIMIT.reset()
+    sab = client.post("/api/ask", json={"question": "Doanh thu Sabeco quý 2/2025"}).json()
+    assert "Chưa có số đã đối chiếu" in sab["answer"] and "Trang có dòng liên quan" in sab["answer"] and sab["sources"], sab["answer"]
     print("PASS: nhận diện 11 công ty, nguồn của 99 PDF, tra cứu, so sánh, dòng tiền và thuyết minh.")
 
 

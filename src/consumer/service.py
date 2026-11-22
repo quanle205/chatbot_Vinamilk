@@ -189,12 +189,13 @@ def lookup(companies, metric, period, basis="quy"):
                          "CDKT" if metric in {"tong_tai_san", "no_phai_tra", "von_chu_so_huu", "hang_ton_kho"}
                          else "KQKD")
             excerpts = repository.excerpts(code, period, label, aliases, statement)
-            for item in excerpts:
-                lines.extend(("", item["text"], ""))
-                sources.append(item["source"])
-            if excerpts:
-                period_notes.append("Các dòng trích từ PDF giữ nguyên cột và đơn vị gốc. Có thể có lỗi OCR. Mở trang nguồn để xác nhận số và kỳ.")
+            pages = sorted({item["source"]["page"] for item in excerpts})
+            if pages:                                      # không in chữ OCR chưa đối chiếu (dễ bị đọc nhầm là số quý): chỉ chỉ trang để người dùng mở PDF xem
+                lines[-1] += f" Trang có dòng liên quan: {', '.join(map(str, pages))} của báo cáo gốc (mở phần Nguồn để xác nhận đúng kỳ và đúng cột)."
+                sources.extend(item["source"] for item in excerpts)
+                period_notes.append("Số chưa đối chiếu được nên không hiển thị lại chữ OCR; mở trang nguồn để xem số trên báo cáo gốc.")
             else:
+                lines[-1] += " Mở báo cáo gốc ở phần Nguồn."
                 sources.extend(report_sources(code, period))
             continue
         value, statement, page, url, scope, difference = found[code]
@@ -233,19 +234,20 @@ def summary(companies, period):
     for code in companies:
         mine = {metric: (value, statement, page, url, scope) for c, _, metric, value, statement, page, url, scope, _ in rows if c == code}
         name = f"{COMPANIES[code][0]} ({code})"
-        if not mine:                                       # chưa có số đối chiếu: trích các dòng tương ứng từ PDF, nói rõ đó là chữ OCR
+        if not mine:                                       # chưa có số đối chiếu: chỉ chỉ trang chứa dòng tương ứng, không in chữ OCR chưa đối chiếu
             lines += [f"**{name} · {PERIODS[period]}** — chưa có số đã đối chiếu cho kỳ này.", ""]
             found = False
             for metric, statement, extra in (("doanh_thu_thuan", "KQKD", ()), ("loi_nhuan_sau_thue", "KQKD", ()), ("tong_tai_san", "CDKT", ("tong cong tai san",))):
                 label = METRICS[metric][0]
-                for item in repository.excerpts(code, period, label, (fold(label), *extra), statement):
-                    lines.append(f"- {label}, trang {item['source']['page']}: {item['text']}")
-                    sources[item["source"]["url"]] = item["source"]
+                items = repository.excerpts(code, period, label, (fold(label), *extra), statement)
+                if items:
+                    lines.append(f"- {label}: trang có dòng liên quan {', '.join(str(p) for p in sorted({i['source']['page'] for i in items}))} (mở phần Nguồn để xác nhận).")
+                    sources.update({i["source"]["url"]: i["source"] for i in items})
                     found = True
             if found:
-                lines += ["", "Các dòng trên trích nguyên văn từ PDF (giữ cột và đơn vị gốc, có thể gồm cả cột kỳ trước hoặc lũy kế và có lỗi OCR); chưa phải số đã đối chiếu."]
+                lines += ["", "Các số trên chưa đối chiếu được nên không hiển thị lại chữ OCR; bấm vào Nguồn để mở đúng trang báo cáo gốc."]
             else:
-                lines.append("Chưa trích được dòng số liệu phù hợp. Mở báo cáo gốc ở phần Nguồn.")
+                lines.append("Chưa tìm được dòng số liệu phù hợp. Mở báo cáo gốc ở phần Nguồn.")
                 sources.update({s["url"]: s for s in report_sources(code, period)})
             lines.append("")
             continue
