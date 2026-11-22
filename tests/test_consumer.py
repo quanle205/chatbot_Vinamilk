@@ -200,6 +200,26 @@ def main():
     from src.agent.agent import REFUSAL_TEXT
     from src.agent.prompts import SYSTEM_PROMPT
     assert "11 công ty" in REFUSAL_TEXT and "12 công ty" in SYSTEM_PROMPT and "không so sánh với công ty khác" not in SYSTEM_PROMPT
+    # Xếp hạng theo ĐÚNG tỷ số được hỏi (không phải giá trị tuyệt đối), nêu rõ bên nào thiếu và vì sao
+    ASK_LIMIT.reset()
+    gross = client.post("/api/ask", json={"question": "Công ty nào có biên lợi nhuận gộp cao nhất quý 2/2025?"}).json()["answer"]
+    assert gross.startswith("**Biên lợi nhuận gộp · Q2/2025**") and "xếp từ cao đến thấp" in gross, gross
+    rows = [line for line in gross.splitlines() if line.startswith("| ") and "---" not in line][1:]
+    assert rows[0].startswith("| 1 | Masan Consumer | **44,1%**") and rows[1].startswith("| 2 | Vinamilk | **42,0%**"), rows[:2]     # Masan > Vinamilk về biên, dù lợi nhuận gộp tuyệt đối nhỏ hơn
+    assert "**Chưa có trong bảng:**" in gross and "Sabeco" in gross and "chưa đối chiếu được số cần dùng" in gross
+    ASK_LIMIT.reset()
+    leverage = client.post("/api/ask", json={"question": "Xếp hạng tỷ lệ nợ trên vốn chủ sở hữu của các công ty quý 1/2026"}).json()["answer"]
+    lev_rows = [line for line in leverage.splitlines() if line.startswith("| ") and "---" not in line][1:]
+    assert "xếp từ thấp đến cao" in leverage and lev_rows[0].startswith("| 1 | Mộc Châu Milk | **12,2%**") and lev_rows[-1].startswith("| 11 | AgriS | **211,6%**"), lev_rows
+    assert "Bibica (chưa có báo cáo kỳ này)" in leverage
+    ASK_LIMIT.reset()
+    net = client.post("/api/ask", json={"question": "Công ty nào có biên lợi nhuận ròng thấp nhất quý 2/2026?"}).json()["answer"]
+    net_rows = [line for line in net.splitlines() if line.startswith("| ") and "---" not in line][1:]
+    assert "xếp từ thấp đến cao" in net and net_rows[0].startswith("| 1 | KIDO | **0,5%**"), net_rows[:1]
+    ASK_LIMIT.reset()
+    wide_ratio = client.post("/api/ask", json={"question": "Vinamilk so với KIDO về biên lợi nhuận gộp quý 2/2026"}).json()["answer"]
+    assert "- **Biên lợi nhuận gộp:** Vinamilk 43,5%, KIDO 21,9%. Vinamilk cao hơn KIDO +21,6 điểm %." in wide_ratio
+    assert "| Biên lợi nhuận trước thuế | 20,7% | 2,8% |" in wide_ratio and "| Dẫn đầu |" in wide_ratio
     print("PASS: nhận diện 11 công ty, nguồn của 99 PDF, tra cứu, so sánh, dòng tiền và thuyết minh.")
 
 

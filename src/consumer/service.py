@@ -2,7 +2,7 @@
 import re
 from difflib import SequenceMatcher
 
-from src.consumer import repository
+from src.consumer import insight, repository
 from src.consumer.catalog import COMPANIES, METRICS, PERIODS, fold
 from src.rag.text import ROMAN, find_periods, fmt_ty, fmt_vnd
 
@@ -324,15 +324,7 @@ def entity_values(code, period, metrics, basis="quy"):
 
 
 def _ratios(v):
-    r = {}
-    if v.get("doanh_thu_thuan"):
-        if "loi_nhuan_gop" in v:
-            r["bien_gop"] = v["loi_nhuan_gop"] / v["doanh_thu_thuan"]
-        if "loi_nhuan_sau_thue" in v:
-            r["bien_rong"] = v["loi_nhuan_sau_thue"] / v["doanh_thu_thuan"]
-    if v.get("von_chu_so_huu") and "no_phai_tra" in v:
-        r["no_von"] = v["no_phai_tra"] / v["von_chu_so_huu"]
-    return r
+    return {key: value for key in insight.RATIOS if (value := insight.ratio_of(v, key)) is not None}
 
 
 def compare(question, companies, with_vinamilk, basis="quy"):
@@ -342,9 +334,15 @@ def compare(question, companies, with_vinamilk, basis="quy"):
     query = fold(question)
     codes = (["VNM"] if with_vinamilk else []) + list(companies)
     asked_metrics = [m for m in METRICS if m in question_metrics(query)]
+    asked_ratios = insight.asked_ratios(query)                  # "biên lợi nhuận gộp cao nhất" xếp theo tỷ số, không theo lợi nhuận gộp tuyệt đối
     wide = len(codes) <= WIDE_LIMIT
     metrics = list(dict.fromkeys([*COMPARE_METRICS, *asked_metrics] if wide else [*asked_metrics, *COMPARE_METRICS]))
     key = asked_metrics[0] if asked_metrics else "loi_nhuan_sau_thue" if matches(query, ("loi nhuan", "lai", "lo")) else "doanh_thu_thuan"
+    label = insight.RATIOS[asked_ratios[0]]["name"] if asked_ratios else METRICS[key][0]
+
+    def usable(values):
+        return insight.ratio_of(values, asked_ratios[0]) is not None if asked_ratios else key in values
+
     requested = requested_periods(question)
     asked = [p for p in requested if p in PERIODS][:2]
     if requested and not asked:
@@ -357,7 +355,7 @@ def compare(question, companies, with_vinamilk, basis="quy"):
         return data[period]
 
     def have(period):
-        return [code for code in codes if key in load(period)[code][0]]
+        return [code for code in codes if usable(load(period)[code][0])]
 
     if asked:
         chosen = asked
@@ -366,29 +364,42 @@ def compare(question, companies, with_vinamilk, basis="quy"):
         best_period = max(order, key=lambda p: (len(have(p)), -order.index(p)))
         chosen = [best_period] if len(have(best_period)) >= 2 else []
     if not chosen:
-        return result(f"Chưa có kỳ nào mà ít nhất hai bên cùng có số {METRICS[key][0].lower()} đã đối chiếu, nên chưa so sánh được. "
+        return result(f"Chưa có kỳ nào mà ít nhất hai bên cùng có số {label.lower()} đã đối chiếu, nên chưa so sánh được. "
                       "Bạn thử nêu rõ kỳ, ví dụ năm 2025 hoặc Q1/2026.")
     texts, sources, notes = [], {}, []
     for period in chosen:
-        entities, missing = [], []                         # (tên, số liệu, phạm vi)
+        entities, missing, missing_codes = [], [], []      # (tên, số liệu, phạm vi)
         for code in codes:
             values, srcs, scope = load(period)[code]
-            if key in values:
+            if usable(values):
                 entities.append((entity_name(code), values, scope))
                 for s in srcs:
                     sources[(s.get("doc"), s.get("page"))] = s
             else:
                 missing.append(entity_name(code))
+                missing_codes.append(code)
                 if code != "VNM":
                     for s in report_sources(code, period)[:1]:
                         sources[(s["doc"], s["page"])] = s
         if missing:
             notes.append(f"Chưa có số đã đối chiếu cho {PERIODS[period]}: {', '.join(missing)}. Mở báo cáo gốc ở phần Nguồn để xem.")
         if len(entities) < 2:
-            only = f" Hiện chỉ có {entities[0][0]}: {METRICS[key][0].lower()} {fmt_ty(entities[0][1][key])} tỷ đồng." if entities else ""
+            only = ""
+            if entities and asked_ratios:
+                only = f" Hiện chỉ có {entities[0][0]}: {label.lower()} {insight.pct(insight.ratio_of(entities[0][1], asked_ratios[0]))}."
+            elif entities:
+                only = f" Hiện chỉ có {entities[0][0]}: {label.lower()} {fmt_ty(entities[0][1][key])} tỷ đồng."
             texts.append(f"**{PERIODS[period]}**: chưa đủ hai bên có số đã đối chiếu để so sánh.{only}")
             continue
-        texts.append(_comparison_text(period, entities, metrics) if wide else _ranking_text(period, entities, metrics, key, query))
+        if asked_ratios and not wide:
+            text = insight.ratio_ranking(PERIODS[period], entities, asked_ratios, query)
+        elif wide:
+            text = _comparison_text(period, entities, metrics, asked_ratios)
+        else:
+            text = _ranking_text(period, entities, metrics, key, query)
+        if missing_codes:
+            text += "\n\n" + insight.missing_line(missing_codes, period, entity_name)
+        texts.append(text)
         if len({scope for _, _, scope in entities}) > 1:
             notes.append("Phạm vi báo cáo khác nhau (hợp nhất, riêng lẻ hoặc theo báo cáo), nên so sánh chỉ mang tính tham khảo.")
     if not asked:
@@ -493,7 +504,7 @@ def ratio_answer(companies, period, basis="quy"):
     return result("\n".join([*lines, "", "**Số dùng để tính**", "", *used]), list(sources.values()), notes)
 
 
-def _comparison_text(period, entities, metrics=COMPARE_METRICS):
+def _comparison_text(period, entities, metrics=COMPARE_METRICS, asked_ratios=()):
     names = [n for n, _, _ in entities]
     label = {m: METRICS[m][0] for m in metrics}
     ratios = {name: _ratios(v) for name, v, _ in entities}
@@ -503,18 +514,21 @@ def _comparison_text(period, entities, metrics=COMPARE_METRICS):
         return (max if highest else min)(have, key=lambda x: x[1]) if len(have) > 1 else None
 
     lines = [f"**So sánh {PERIODS[period]}: {', '.join(names[:-1])} và {names[-1]}**", "",
-             "| Chỉ tiêu | " + " | ".join(names) + " | Cao nhất |", "|---|" + "---:|" * len(names) + "---|"]
+             "| Chỉ tiêu | " + " | ".join(names) + " | Dẫn đầu |", "|---|" + "---:|" * len(names) + "---|"]
     for m in metrics:
         top = best(lambda n, m=m: dict((e[0], e[1]) for e in entities)[n].get(m))
         cells = [fmt_ty(v[m]) if m in v else "—" for _, v, _ in entities]
         lines.append(f"| {label[m]} (tỷ đồng) | " + " | ".join(cells) + f" | {top[0] if top else '—'} |")
-    for key, text, highest in (("bien_gop", "Biên lợi nhuận gộp", True), ("bien_rong", "Biên lợi nhuận ròng", True), ("no_von", "Nợ phải trả / vốn chủ sở hữu", False)):
+    for key, spec in insight.RATIOS.items():
+        highest = spec["better"] == "high"
         top = best(lambda n, k=key: ratios[n].get(k), highest)
+        if not any(key in ratios[n] for n in names):
+            continue
         cells = [_pct(ratios[n][key]) if key in ratios[n] else "—" for n in names]
-        lines.append(f"| {text} | " + " | ".join(cells) + f" | {top[0] + (' (thấp nhất)' if not highest else '') if top else '—'} |")
+        lines.append(f"| {spec['name']} | " + " | ".join(cells) + f" | {top[0] + ('' if highest else ' (nợ thấp nhất)') if top else '—'} |")
 
     values = {n: v for n, v, _ in entities}
-    notes = ["", "**Nhận xét**", ""]
+    notes = ["", "**Nhận xét**", "", *insight.focus_lines(entities, list(asked_ratios))]
     top = best(lambda n: values[n].get("doanh_thu_thuan"))
     if top:
         others = sorted(((n, values[n]["doanh_thu_thuan"]) for n in names if n != top[0] and values[n].get("doanh_thu_thuan")), key=lambda x: -x[1])
