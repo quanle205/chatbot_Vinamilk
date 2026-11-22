@@ -14,6 +14,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
+from ..consumer.assess import asked_assessment
 from ..rag.text import accent_free, find_periods, normalize
 from ..tools.metrics import METRICS
 
@@ -90,7 +91,7 @@ def _mentions_metric(flat: str) -> bool:
 def needs_clarification(question: str, history=None) -> Clarification | None:
     """Câu hỏi này có nên được hỏi lại không? None = đủ rõ, cứ để mô hình trả lời."""
     flat = _norm(question)
-    if _NOTES.search(flat) or _SKIP.search(flat):
+    if _NOTES.search(flat) or _SKIP.search(flat) or asked_assessment(flat):      # câu đánh giá ("khả năng thanh toán nợ tốt không") không phải câu mơ hồ
         return None
 
     # 1) Chỉ tiêu chung chung

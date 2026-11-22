@@ -94,6 +94,9 @@ def ask(body: AskBody, request: Request):
         if service.out_of_scope(body.question, follow_up=bool(body.history or body.company)):   # giá cổ phiếu, tư vấn đầu tư...: nhánh tra cứu công ty cũng phải từ chối
             return service.result("Mình chỉ trả lời về số liệu và nội dung trong báo cáo tài chính của các công ty trong danh mục; không trả lời về giá cổ phiếu, dự báo hay tư vấn đầu tư.")
         return service.answer_question(body.question, companies, body.company_period, context)
+    topic = service.vinamilk_assessment(body.question)       # "Vinamilk có khả năng thanh toán nợ tốt không?": đánh giá bằng số, không cần Gemini
+    if topic:
+        return service.assess_answer(body.question, [], True, topic)
     contents = [types.Content(role=t.role, parts=[types.Part(text=t.text)]) for t in body.history[-2 * MAX_HISTORY_TURNS:]]
     try:
         r = get_agent().ask(body.question, contents)

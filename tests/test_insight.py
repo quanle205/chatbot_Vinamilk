@@ -95,6 +95,51 @@ def test_series_answer_carries_a_chart_without_repeating_the_table():
     assert by_period["Q1/2025"] is None and by_period["Q2/2025"] is not None, by_period    # Q1/2025 là báo cáo riêng: không vẽ nối với các quý hợp nhất
 
 
+def test_assessment_questions_are_answered_with_numbers_not_refused_or_asked_back():
+    from src.agent.clarify import needs_clarification
+    from src.consumer import assess
+    assert assess.asked_assessment("kido co hieu qua sinh loi tot khong") == "profit"
+    assert assess.asked_assessment("vinamilk co kha nang thanh toan no tot khong") == "leverage"
+    assert assess.asked_assessment("tinh hinh tai chinh cua sabeco the nao") == "general"
+    assert assess.asked_assessment("no cua habeco quy 1 2026 la bao nhieu") is None         # câu hỏi số liệu thường không bị coi là đánh giá
+    assert needs_clarification("Vinamilk có khả năng thanh toán nợ tốt không?") is None      # lỗi cũ: bị hỏi lại "Bạn muốn xem nợ nào?"
+    assert needs_clarification("Nợ Q1/2026") is not None                                      # câu thật sự mơ hồ vẫn được hỏi lại
+    kido = ask("KIDO có hiệu quả sinh lời tốt không?")["answer"]
+    assert kido.startswith("**Đánh giá khả năng sinh lời của KIDO ·") and "Xếp hạng (1 = tốt nhất)" in kido and "**Tóm lại:**" in kido, kido
+    assert "chỉ trả lời về số liệu" not in kido                                              # lỗi cũ: bị từ chối như tư vấn đầu tư
+    reply = ask("Vinamilk có khả năng thanh toán nợ tốt không?")
+    assert reply["answer"].startswith("**Đánh giá mức nợ và độ an toàn tài chính của Vinamilk") and "hệ số thanh toán hiện hành 1,91 lần" in reply["answer"], reply["answer"]
+    assert any("không phải khuyến nghị đầu tư" in n for n in reply["notes"]) and reply["sources"]
+    for question in ("Có nên mua cổ phiếu KIDO không?", "Cổ phiếu KIDO có tốt không?"):
+        assert "chỉ trả lời về số liệu" in ask(question)["answer"], question                   # tư vấn đầu tư vẫn bị từ chối
+    assert "tối đa 3 doanh nghiệp" in ask("Vinamilk, KIDO, Masan Consumer và Sabeco có khả năng thanh toán nợ tốt không?")["answer"]
+
+
+def test_assessment_ratios_match_independent_calculation_from_duckdb():
+    with duckdb.connect(str(DB_PATH), read_only=True, config={"threads": 1}) as db:
+        def one(metric, basis):
+            rows = db.execute("""select distinct f.value from document_facts f join documents d using(id)
+                                 where d.company='KDC' and d.period='Q3/2026' and f.metric=? and f.basis=?""", [metric, basis]).fetchall()
+            assert len(rows) == 1
+            return rows[0][0]
+        margin = one("loi_nhuan_gop", "quy") / one("doanh_thu_thuan", "quy")
+    assert f"| Biên lợi nhuận gộp | {margin * 100:.1f}%".replace(".", ",") in ask("KIDO có hiệu quả sinh lời tốt không?")["answer"]
+
+
+def test_company_summary_gets_a_short_assessment():
+    answer = ask("Tình hình tài chính của Sabeco quý 2/2026")["answer"]
+    assert answer.startswith("**Tóm tắt báo cáo Q2/2026 · Sabeco (SAB)**") and "**Đánh giá tình hình tài chính của Sabeco · Q2/2026**" in answer
+
+
+def test_small_changes_are_not_called_improving_or_worsening():
+    from src.consumer.assess import assess_text
+    values = {"doanh_thu_thuan": 1000, "loi_nhuan_gop": 300, "loi_nhuan_sau_thue": 100}
+    previous = {"doanh_thu_thuan": 1000, "loi_nhuan_gop": 295, "loi_nhuan_sau_thue": 98}      # biên gộp +0,5 điểm, biên ròng +0,2 điểm
+    peers = {"bien_gop": [0.2, 0.25, 0.3, 0.35, 0.4], "bien_rong": [0.05, 0.08, 0.1, 0.12, 0.15]}
+    text = assess_text("X", "Q2", "cùng kỳ", values, previous, peers, "profit")
+    assert "ít thay đổi so với kỳ trước" in text and "đang xấu đi" not in text and "đang cải thiện" not in text
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted(globals().items()):

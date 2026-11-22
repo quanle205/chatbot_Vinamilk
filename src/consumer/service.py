@@ -2,7 +2,7 @@
 import re
 from difflib import SequenceMatcher
 
-from src.consumer import growth, insight, repository
+from src.consumer import assess, growth, insight, repository
 from src.consumer.catalog import COMPANIES, METRICS, PERIODS, fold
 from src.rag.text import ROMAN, find_periods, fmt_ty, fmt_vnd
 
@@ -43,6 +43,14 @@ def asks_all(query):
     return matches(query, ALL_WORDS) and not matches(query, ("cong ty con", "cong ty lien ket", "cong ty me"))
 
 
+def vinamilk_assessment(question):
+    """Chủ đề ("profit"/"leverage"/"general") nếu đây là câu đánh giá về Vinamilk (không nêu công ty khác, không hỏi giá cổ phiếu), ngược lại None."""
+    query = fold(question)
+    if matches(query, OFF_TOPIC_WORDS):
+        return None
+    return assess.asked_assessment(query)
+
+
 def question_companies(question):
     query = fold(question)
     exact = [code for code, (_, aliases) in COMPANIES.items() if matches(query, (code.lower(), *aliases))]
@@ -63,6 +71,8 @@ def out_of_scope(question, follow_up=False):
     query = fold(question)
     if matches(query, OFF_TOPIC_WORDS):
         return True
+    if assess.asked_assessment(query):
+        return False
     if follow_up or question_metrics(query) or requested_periods(question) or matches(
             query, (*REPORT_WORDS, *COMPARE_WORDS, *SERIES_WORDS, *RATIO_WORDS, "thuyet minh")):
         return False
@@ -706,6 +716,93 @@ def why_answer(question, companies, with_vinamilk, basis="quy"):
     return result("\n\n".join(texts), list(sources.values()), list(dict.fromkeys(notes)))
 
 
+def assessment_for(codes, period, topic, basis="quy"):
+    """Đánh giá (tỷ số, so với kỳ trước và nhóm doanh nghiệp) cho `codes` ở một kỳ: (danh sách văn bản, nguồn, ghi chú)."""
+    keys = assess.TOPICS[topic]
+    metrics = list(COMPARE_METRICS)
+    cache = {}
+
+    def values(code, p):
+        if (code, p) not in cache:
+            cache[code, p] = entity_values(code, p, metrics, basis)
+        return cache[code, p]
+
+    everyone = ["VNM", *COMPANIES]
+    peers = {k: [r for c in everyone if (r := insight.ratio_of(values(c, period)[0], k)) is not None] for k in keys}
+    scopes = {values(c, period)[2] for c in everyone if values(c, period)[0] and any(insight.ratio_of(values(c, period)[0], k) is not None for k in keys)}
+    base = growth.last_year(period) if growth.quarter_key(period) else None
+    kind_label = "cùng kỳ năm trước"
+    texts, sources, notes = [], {}, []
+    for code in codes:
+        cur, srcs, scope = values(code, period)
+        previous = None
+        if base in PERIODS:
+            pv, psrcs, pscope = values(code, base)
+            if pv and _same_scope(code, pscope, scope):
+                previous = pv
+                for src in psrcs:
+                    sources[(src.get("doc"), src.get("page"))] = src
+        texts.append(assess.assess_text(entity_name(code), PERIODS[period], kind_label, cur, previous, peers, topic))
+        for src in srcs:
+            sources[(src.get("doc"), src.get("page"))] = src
+        if code == "VNM" and topic in ("leverage", "general") and period in VNM_QUARTERS:
+            extra = _vinamilk_liquidity(period)
+            if extra:
+                texts[-1] += "\n\n" + extra
+    if len({s for s in scopes if s}) > 1:
+        notes.append("Phạm vi báo cáo của các doanh nghiệp trong nhóm khác nhau (hợp nhất, riêng lẻ hoặc theo báo cáo), nên so sánh chỉ mang tính tham khảo.")
+    notes.append(assess.FOOTNOTE)
+    return texts, sources, notes
+
+
+def _vinamilk_liquidity(period):
+    """Thanh khoản và khả năng trả lãi của Vinamilk (chỉ Vinamilk có đủ số liệu để tính): một dòng ngắn."""
+    from src.tools.registry import call_tool
+    parts = []
+    for key, label in (("thanh_toan_hien_hanh", "hệ số thanh toán hiện hành"), ("thanh_toan_nhanh", "hệ số thanh toán nhanh"), ("kha_nang_tra_lai", "khả năng thanh toán lãi vay")):
+        res = call_tool("get_ratio", {"ratio": key, "period": period})
+        if res.get("ok") and isinstance(res.get("value"), (int, float)):
+            text = f"{label} {res['value']:.2f}".replace(".", ",") + " lần"
+            if key == "thanh_toan_hien_hanh":
+                text += f" (tài sản ngắn hạn gấp {res['value']:.2f} lần nợ ngắn hạn)".replace(".", ",")
+            parts.append(text)
+    return ("- **Riêng Vinamilk** (chỉ Vinamilk có đủ số liệu để tính): " + "; ".join(parts) + ".") if parts else ""
+
+
+def assess_answer(question, companies, with_vinamilk, topic, basis="quy"):
+    """Trả lời câu đánh giá ("sinh lời tốt không", "nợ có an toàn không") bằng số: so với kỳ trước và với nhóm doanh nghiệp trong dữ liệu."""
+    codes = (["VNM"] if with_vinamilk else []) + list(companies)
+    if not codes:
+        return result("Bạn cho mình biết công ty cần đánh giá (Vinamilk hoặc một trong 11 công ty hàng tiêu dùng) và có thể nêu kỳ, ví dụ \"KIDO quý 2/2026\".")
+    if len(codes) > 3:
+        return result("Mình đánh giá tối đa 3 doanh nghiệp mỗi lần. Để so sánh nhiều công ty, bạn hỏi \"công ty nào có biên lợi nhuận gộp cao nhất\" hoặc \"xếp hạng tỷ lệ nợ trên vốn chủ\".")
+    keys = assess.TOPICS[topic]
+    requested = [p for p in requested_periods(question) if p in PERIODS]
+    usable = {}
+
+    def ok(code, period):
+        if (code, period) not in usable:
+            usable[code, period] = any(insight.ratio_of(entity_values(code, period, COMPARE_METRICS, basis)[0], k) is not None for k in keys)
+        return usable[code, period]
+
+    if requested:
+        period = requested[0]
+        if not all(ok(code, period) for code in codes):
+            lacking = [entity_name(c) for c in codes if not ok(c, period)]
+            latest = next((p for p in reversed(PERIODS) if all(ok(c, p) for c in codes)), None)
+            hint = f" Kỳ gần nhất có số của cả hai bên: {PERIODS[latest]}." if latest else ""
+            return result(f"Chưa có số đã đối chiếu của {', '.join(lacking)} cho {PERIODS[period]} để đánh giá.{hint}",
+                          [s for c in codes if c != "VNM" for s in report_sources(c, period)[:1]])
+    else:
+        period = next((p for p in reversed(PERIODS) if all(ok(c, p) for c in codes)), None)
+        if period is None:
+            return result("Chưa có kỳ nào mà các doanh nghiệp được hỏi cùng có đủ số đã đối chiếu để đánh giá.")
+    texts, sources, notes = assessment_for(codes, period, topic, basis)
+    if not requested:
+        notes.insert(0, f"Câu hỏi không nêu kỳ nên dùng {PERIODS[period]}, kỳ gần nhất có số của {'doanh nghiệp được hỏi' if len(codes) == 1 else 'các doanh nghiệp được hỏi'}.")
+    return result("\n\n".join(texts), list(sources.values()), notes)
+
+
 def report_sources(company, period):
     return [repository.source(company, p, "PDF", 1, url, section)
             for p, url, section in repository.documents(company, period)]
@@ -740,6 +837,9 @@ def answer_question(question, companies, selected_period=None, context=None):
             return why_answer(question, companies, with_vinamilk, basis)
         if growth.asked_growth(query):
             return growth_answer(question, companies, with_vinamilk, basis)
+    topic = assess.asked_assessment(query)
+    if topic and not matches(query, COMPARE_WORDS + ("thuyet minh",)) and not asks_all(query):
+        return assess_answer(question, companies, with_vinamilk, topic, basis)
     comparing = len(companies) + with_vinamilk >= 2 and matches(query, COMPARE_WORDS)
     no_period = not requested_periods(question) and not selected_period       # không nêu kỳ: để bảng so sánh tự chọn kỳ cả hai bên cùng có số
     if with_vinamilk or len(companies) > 2 or (comparing and (no_period or not question_metrics(query))):
@@ -799,7 +899,13 @@ def answer_for_period(query, companies, period):
         return result(answer, [item["source"] for item in excerpts], ["Trích đoạn OCR. Đối chiếu báo cáo gốc nếu cần dùng số liệu."])
     metrics = question_metrics(query)
     if not metrics and not matches(query, RATIO_WORDS):
-        return summary(companies, period)
+        reply = summary(companies, period)
+        if len(companies) == 1 and "| Chỉ tiêu |" in reply["answer"]:               # tóm tắt một công ty: thêm nhận định so với kỳ trước và nhóm doanh nghiệp
+            texts, sources, notes = assessment_for(companies, period, "general", "quy")
+            reply["answer"] += "\n\n" + texts[0]
+            reply["sources"] = [*reply["sources"], *sources.values()]
+            reply["notes"] = list(dict.fromkeys([*reply["notes"], *notes]))
+        return reply
     basis = "luy_ke" if matches(query, ("luy ke", "6 thang", "9 thang")) else "quy"
     if matches(query, RATIO_WORDS):
         return ratio_answer(companies, period, basis)

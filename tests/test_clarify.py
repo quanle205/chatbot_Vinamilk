@@ -69,6 +69,13 @@ def test_every_cited_page_has_evidence_image_or_text():
     assert page_excerpt("q2-2025", 9999) is None
 
 
+def test_evaluative_questions_are_not_treated_as_ambiguous():
+    for q in ["Vinamilk có khả năng thanh toán nợ tốt không?", "Nợ của Vinamilk có an toàn không?", "Lợi nhuận của Vinamilk thế nào?",
+              "Tình hình nợ của Vinamilk ra sao?"]:
+        assert not needs_clarification(q), q                       # câu đánh giá được trả lời bằng số, không hỏi lại "nợ nào"
+    assert needs_clarification("Nợ Q1/2026") and needs_clarification("Lợi nhuận quý 2/2026 là bao nhiêu?")    # câu thật sự mơ hồ vẫn hỏi lại
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted(globals().items()):
