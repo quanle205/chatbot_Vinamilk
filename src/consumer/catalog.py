@@ -27,6 +27,16 @@ METRICS = {
     "dong_tien_dau_tu": ("Lưu chuyển tiền thuần từ hoạt động đầu tư", ("dong tien dau tu",)),
     "dong_tien_tai_chinh": ("Lưu chuyển tiền thuần từ hoạt động tài chính", ("dong tien tai chinh",)),
 }
+# Chỉ tiêu mở rộng: trích tự động và chỉ nhận khi thỏa đẳng thức (ngắn hạn + dài hạn = tổng; doanh thu - giá vốn = lợi nhuận gộp).
+# Tách khỏi METRICS (11 chỉ tiêu lõi mà báo cáo mẫu MCM/QNS đã đối chiếu tay đủ cả 11) để không đổi kiểm tra đủ bộ chỉ tiêu lõi.
+EXTRA_METRICS = {
+    "tai_san_ngan_han": ("Tài sản ngắn hạn", ("tai san luu dong",)),
+    "tai_san_dai_han": ("Tài sản dài hạn", ()),
+    "no_ngan_han": ("Nợ ngắn hạn", ()),
+    "no_dai_han": ("Nợ dài hạn", ()),
+    "gia_von": ("Giá vốn hàng bán", ("gia von",)),
+}
+ALL_METRICS = {**METRICS, **EXTRA_METRICS}
 PERIODS = {
     "FY2025": "Năm 2025",
     "FY2024-2025": "Niên độ 2024–2025",

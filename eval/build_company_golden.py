@@ -259,6 +259,35 @@ def build(split: str) -> list[dict]:
     for i, question in enumerate(refuse, 1):
         cases.append(case(prefix, i, "ngoai_pham_vi", question, behavior="refuse", any_of=["chỉ trả lời", "không thể trả lời"], absent=["tỷ đồng"]))
 
+    # ---- (chỉ dev, viết sau khi người dùng báo lỗi) số năm 2025, chỉ tiêu mở rộng, khoản mục chưa có số
+    if dev:
+        n = 0
+        for code in COMPANIES:
+            if code in ("SBT", "MCH"):                                          # SBT: năm tài chính kết thúc 30/6; MCH: báo cáo năm không có bảng có mã, xử lý riêng bên dưới
+                continue
+            got = fact(code, "FY2025", "tong_tai_san", "point")
+            if got and got[0] > 0:
+                n += 1
+                cases.append(case(prefix, n, "nam_2025", f"Tổng tài sản năm 2025 của {NAMES[code]}", contains=[dots(got[0])], absent=["Chưa có"], sources=True))
+        q4 = fact("MCH", "Q4/2025", "doanh_thu_thuan", "luy_ke")
+        if q4:
+            cases.append(case(prefix, n + 1, "nam_2025", "Doanh thu thuần năm 2025 của Masan Consumer",
+                              contains=[dots(q4[0]), "Số lấy từ báo cáo Q4/2025 vì báo cáo năm chưa có dòng này"], sources=True))
+        n = 0
+        for code in pick(list(COMPANIES), 11):
+            options = [(m, p) for m in ("tai_san_ngan_han", "no_ngan_han", "gia_von") for p in QUARTERS
+                       if fact(code, p, m, "point" if m != "gia_von" else "quy") and ("chi_tieu_mo_rong", code, p, m) not in TAKEN]
+            if not options or n >= 8:
+                continue
+            metric, period = rng.choice(options)
+            TAKEN.add(("chi_tieu_mo_rong", code, period, metric))
+            value = fact(code, period, metric, "point" if metric != "gia_von" else "quy")[0]
+            n += 1
+            name = {"tai_san_ngan_han": "Tài sản ngắn hạn", "no_ngan_han": "Nợ ngắn hạn", "gia_von": "Giá vốn hàng bán"}[metric]
+            cases.append(case(prefix, n, "chi_tieu_mo_rong", f"{name} {qtext(period)} của {NAMES[code]}", contains=[dots(value)], absent=["Tóm tắt"], sources=True))
+        for i, item in enumerate(("Chi phí bán hàng năm 2025 của KIDO", "Phải thu khách hàng quý 2/2026 của Sabeco", "Khấu hao quý 1/2026 của Masan Consumer"), 1):
+            cases.append(case(prefix, i, "khoan_muc", item, contains=["chưa có số đã đối chiếu của khoản mục này"], absent=["Tóm tắt"], sources=True))
+
     # ---- câu hỏi về chính bộ dữ liệu
     cases.append(case(prefix, 1, "danh_muc", "Có bao nhiêu công ty trong dữ liệu của bạn?" if dev else "Dữ liệu gồm những công ty nào?", contains=["12 công ty", "Sabeco"]))
 

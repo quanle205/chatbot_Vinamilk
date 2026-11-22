@@ -3,6 +3,7 @@ from collections import defaultdict
 import json
 from pathlib import Path
 
+from src.consumer.catalog import EXTRA_METRICS
 from src.ingest.consumer_extract import extract_document
 from src.ingest.consumer_ocr import INTERIM, RAW, inputs
 
@@ -64,10 +65,10 @@ def add_documents(db):
             if parts:
                 indexed += 1
                 chunks.extend((path.stem, page, i, part) for i, part in enumerate(parts))
-            if needs_facts:
-                pages[page] = boxes
-        if needs_facts:                                   # trích theo nội dung + đẳng thức kế toán (xem consumer_extract.py)
-            for (metric, basis), (value, page, scope, statement) in extract_document(pages, company, period).items():
+            pages[page] = boxes
+        # Trích theo nội dung + đẳng thức kế toán (xem consumer_extract.py). Báo cáo đã đối chiếu tay (MCM/QNS) giữ nguyên số lõi, chỉ bổ sung chỉ tiêu mở rộng.
+        for (metric, basis), (value, page, scope, statement) in extract_document(pages, company, period).items():
+            if needs_facts or metric in EXTRA_METRICS:
                 candidates[company, period, metric, basis].append((path.stem, metric, basis, value, page, scope, statement))
         documents.append((path.stem, company, period,
                           row["source_url"], section, row["pages"], indexed))

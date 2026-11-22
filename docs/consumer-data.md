@@ -64,8 +64,17 @@ Phép kiểm chéo lũy kế = lũy kế kỳ trước + riêng quý khớp 55/7
 
 Trang bị OCR hỏng thường là trang xoay ngang. Chạy lại bằng `python -m src.ingest.consumer_ocr --windows-ocr --retry-poor --company <MÃ>` (tự thử xoay 90°/−90°/180°), rồi `python -m src.ingest.build_consumer_db`.
 
-Độ phủ sau khi trích: 5 chỉ số chung (biên gộp, trước thuế, ròng, nợ/vốn chủ, nợ/tổng tài sản) tính được **299/400 (75%)** ô công ty × quý có báo cáo (trước đó khoảng một phần ba).
-Còn thiếu chủ yếu do trang kết quả kinh doanh hoặc cân đối vẫn bị OCR đọc nhiễu (SAB, SBT, PAN Q3/2026, QNS Q3/2025, CMF/VCF một số quý); các ô này hiện "Chưa có số đối chiếu".
+Bố cục đã xử lý thêm (2026-11-22, sau khi phát hiện tổng tài sản KIDO 2025 "chưa có số" dù có trong PDF):
+- **Trang in hai trang A5 cạnh nhau** (báo cáo thường niên): cột số của nửa trái nằm ở x < 0,37 của trang, ngoài vùng quy tắc trang đơn giả định. Bộ trích tách trang có khe giữa thành hai trang con (chỉ THÊM ứng viên, không thay trang gốc) rồi áp dụng quy tắc như cũ.
+  Kết quả: báo cáo năm KIDO 2025 từ 4 lên 13 chỉ tiêu, tổng tài sản **13.907,2 tỷ** (báo cáo năm đã kiểm toán, đối chiếu ảnh trang PDF), khác 13.980,8 tỷ của báo cáo quý 4 chưa kiểm toán.
+- **Chỉ tiêu mở rộng** (`EXTRA_METRICS`): tài sản ngắn hạn, tài sản dài hạn, nợ ngắn hạn, nợ dài hạn, giá vốn hàng bán; chỉ nhận khi đẳng thức tổng phụ đúng (ngắn + dài = tổng; doanh thu − giá vốn = lợi nhuận gộp). Cộng lại bằng đúng tổng đã đối chiếu tay của MCM/QNS (`tests/test_insight.py`).
+- **Tổng tài sản = tổng nguồn vốn (440)** khi dòng 270/280 không đọc được; **dòng 10/11/20 bị OCR bỏ sót** được suy ra từ hai dòng còn lại và chỉ nhận khi số suy ra xuất hiện đúng như một ô số trên trang.
+- Báo cáo thường niên Masan (MCH) không có cột mã số nên không trích được; câu hỏi "năm 2025" của MCH lấy từ báo cáo quý 4/2025 (lũy kế 12 tháng, số dư cuối năm) và ghi rõ là chưa kiểm toán.
+- Có số lũy kế mà không có số riêng quý thì câu trả lời nêu số lũy kế (ghi rõ), không nói "chưa có".
+
+Độ phủ sau khi trích: 5 chỉ số chung (biên gộp, trước thuế, ròng, nợ/vốn chủ, nợ/tổng tài sản) tính được **328/400 (82%)** ô công ty × quý có báo cáo (299/400 trước khi xử lý các bố cục trên, khoảng một phần ba ban đầu); số chỉ tiêu tự động tăng từ 615 lên 1.073 mà không số cũ nào đổi giá trị.
+Còn thiếu chủ yếu do trang kết quả kinh doanh hoặc cân đối vẫn bị OCR đọc nhiễu (SAB, QNS 2025, CMF, PAN Q3/2026, BBC Q2/2026 chưa có báo cáo); các ô này hiện "Chưa có số đối chiếu".
+Kiểm tra nhất quán: hỏi mọi chỉ tiêu cho 11 công ty ở 3 kỳ (416 câu), câu trả lời khớp cơ sở dữ liệu ở cả 416 câu (có số thì nêu số, không có thì nói chưa có).
 
 ## Thử trên chatbot
 

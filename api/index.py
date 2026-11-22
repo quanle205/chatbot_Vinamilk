@@ -127,7 +127,7 @@ def consumer_catalog():
         available[code] = [p for p in periods if p in values]
     return {"companies": analytics.COMPANIES,
             "comparison_limit": len(analytics.COMPANIES),
-            "metrics": {k: v[0] for k, v in catalog.METRICS.items()},
+            "metrics": {k: v[0] for k, v in catalog.ALL_METRICS.items()},
             "periods": periods, "available": available}
 
 
@@ -137,7 +137,7 @@ def consumer_lookup(body: ConsumerLookupBody, request: Request):
     companies = list(dict.fromkeys(body.companies))
     if any(code not in analytics.COMPANIES for code in companies):
         raise HTTPException(422, "Mã doanh nghiệp chưa được hỗ trợ.")
-    if body.metric not in catalog.METRICS or not any(
+    if body.metric not in catalog.ALL_METRICS or not any(
         body.period in analytics.periods(code, analyst()) for code in companies
     ):
         raise HTTPException(422, "Kỳ hoặc chỉ tiêu chưa được hỗ trợ.")
@@ -151,7 +151,7 @@ def consumer_lookup(body: ConsumerLookupBody, request: Request):
                 sources.extend(citation)
             else:
                 lines.append(f"- **{analytics.COMPANIES[code]}** · Chưa có số đã đối chiếu.")
-        label = catalog.METRICS[body.metric][0]
+        label = catalog.ALL_METRICS[body.metric][0]
         return service.result(f"**{label} · {body.period}**\n\n" + "\n".join(lines), sources)
     return service.lookup(companies, body.metric, body.period, body.basis)
 

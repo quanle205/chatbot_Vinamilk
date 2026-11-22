@@ -174,6 +174,64 @@ def test_vinamilk_question_about_a_period_without_data_is_answered_instantly_wit
         assert client.post("/api/ask", json={"question": question}).status_code == 503
 
 
+def test_year_2025_lookups_use_the_audited_annual_report_and_answer_only_what_was_asked():
+    total = ask("Tổng tài sản năm 2025 của KIDO")                                           # lỗi cũ: "Chưa có số đã đối chiếu" dù PDF có
+    assert "13.907.212.327.484" in total["answer"] and "Chưa có" not in total["answer"] and "trang 84" in total["answer"], total["answer"]
+    current = ask("Tài sản ngắn hạn năm 2025 của KIDO")                                     # lỗi cũ: bảng tóm tắt lan man không có chỉ tiêu được hỏi
+    assert current["answer"].startswith("**Tài sản ngắn hạn · Năm 2025**") and "6.674.909.250.681" in current["answer"], current["answer"]
+    assert "Tóm tắt" not in current["answer"] and "Đánh giá" not in current["answer"] and current["sources"]
+    debt = ask("Nợ ngắn hạn và nợ dài hạn của Sabeco quý 2/2026")["answer"]
+    assert "**Nợ ngắn hạn · Q2/2026**" in debt and "**Nợ dài hạn · Q2/2026**" in debt and "**Nợ phải trả" not in debt      # không bị đổi nhầm thành "Nợ phải trả"
+    mch = ask("Doanh thu thuần năm 2025 của Masan Consumer")                                 # báo cáo thường niên MCH không có bảng có mã: lấy từ báo cáo quý 4, nói rõ
+    assert "Số lấy từ báo cáo Q4/2025 vì báo cáo năm chưa có dòng này" in mch["answer"] and any("chưa kiểm toán" in n for n in mch["notes"]), mch
+
+
+def test_cumulative_figure_is_offered_when_only_the_cumulative_column_was_read():
+    with duckdb.connect(str(DB_PATH), read_only=True, config={"threads": 1}) as db:
+        rows = db.execute("""select distinct f.basis, f.value from document_facts f join documents d using(id)
+                             where d.company='PAN' and d.period='Q4/2025' and f.metric='loi_nhuan_truoc_thue'""").fetchall()
+    assert [b for b, _ in rows] == ["luy_ke"], rows                                            # điều kiện của ca này: chỉ có lũy kế, không có riêng quý
+    reply = ask("Lợi nhuận trước thuế quý 4/2025 của Tập đoàn PAN")
+    value = f"{rows[0][1]:,}".replace(",", ".")
+    assert "Chưa có số riêng quý đã đối chiếu. Số lũy kế đến hết Q4/2025" in reply["answer"] and value in reply["answer"], reply["answer"]
+    assert reply["sources"]
+
+
+def test_line_item_without_data_is_answered_directly_not_with_an_off_topic_summary():
+    reply = ask("Chi phí bán hàng năm 2025 của KIDO")
+    answer = reply["answer"]
+    assert answer.startswith("**Chi phí bán hàng · Năm 2025** — chưa có số đã đối chiếu của khoản mục này cho KIDO."), answer
+    assert "Hiện tra cứu được:" in answer and "tài sản ngắn hạn" in answer and "Tóm tắt" not in answer and reply["sources"]
+    assert not re.search(r"\d{1,3}(?:[.,]\d{3}){3,}", answer)                                  # không in lại số/chữ OCR chưa đối chiếu
+    generic = ask("Tình hình tài chính của KIDO năm 2025")["answer"]                         # câu chung chung vẫn được tóm tắt như cũ
+    assert generic.startswith("**Tóm tắt báo cáo Năm 2025 · KIDO (KDC)**")
+
+
+def test_extra_metrics_add_up_to_the_hand_verified_totals_for_mcm_and_qns():
+    """Chỉ tiêu mở rộng (trích tự động) phải cộng đúng ra tổng đã đối chiếu tay của MCM/QNS: tài sản ngắn + dài hạn = tổng tài sản; nợ ngắn + dài hạn = nợ phải trả."""
+    with duckdb.connect(str(DB_PATH), read_only=True, config={"threads": 1}) as db:
+        verified = {(c, p, m): v for c, p, m, v in db.execute("select company, period, metric, value from facts where basis='point'").fetchall()}
+        extra = {(c, p, m): v for c, p, m, v in db.execute("""select d.company, d.period, f.metric, f.value from document_facts f join documents d using(id)
+                                                              where f.basis='point' and f.metric in ('tai_san_ngan_han','tai_san_dai_han','no_ngan_han','no_dai_han')""").fetchall()}
+    checked = 0
+    for (company, period), total in {(c, p): verified[c, p, "tong_tai_san"] for c, p, m in verified if m == "tong_tai_san"}.items():
+        if (company, period, "tai_san_ngan_han") in extra:
+            assert extra[company, period, "tai_san_ngan_han"] + extra[company, period, "tai_san_dai_han"] == total, (company, period)
+            assert extra[company, period, "no_ngan_han"] + extra[company, period, "no_dai_han"] == verified[company, period, "no_phai_tra"], (company, period)
+            checked += 1
+    assert checked >= 6, checked                                                             # hầu hết 8 báo cáo MCM/QNS đã đối chiếu tay có đủ chỉ tiêu mở rộng
+    for (company, period, metric), value in extra.items():                                    # và với mọi công ty: tổng phụ không vượt tổng
+        assert value > 0, (company, period, metric)
+
+
+def test_lookup_screen_offers_the_extra_metrics():
+    catalog = client.get("/api/consumer/catalog").json()["metrics"]
+    assert catalog["tai_san_ngan_han"] == "Tài sản ngắn hạn" and catalog["gia_von"] == "Giá vốn hàng bán" and "doanh_thu_thuan" in catalog
+    BROWSE_LIMIT.reset()
+    reply = client.post("/api/consumer/lookup", json={"companies": ["KDC", "VNM"], "period": "Q2/2026", "metric": "tai_san_ngan_han"})
+    assert reply.status_code == 200 and "Tài sản ngắn hạn" in reply.json()["answer"] and reply.json()["sources"], reply.text
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted(globals().items()):

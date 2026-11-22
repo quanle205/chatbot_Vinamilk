@@ -3,7 +3,8 @@ import re
 from difflib import SequenceMatcher
 
 from src.consumer import assess, growth, insight, repository
-from src.consumer.catalog import COMPANIES, METRICS, PERIODS, fold
+from src.consumer import catalog as _catalog
+from src.consumer.catalog import ALL_METRICS as METRICS, COMPANIES, PERIODS, fold
 from src.rag.text import ROMAN, find_periods, fmt_ty, fmt_vnd
 
 QUARTER_WITHOUT_YEAR = re.compile(r"\b(?:q|quy)\s*([1-4]|iv|iii|ii|i)\b")
@@ -196,9 +197,20 @@ def lookup(companies, metric, period, basis="quy"):
     rows = repository.facts(companies, period, metric, "luy_ke" if derived else basis)
     previous = {r[0]: r[1:] for r in repository.facts(companies, previous_period, metric, "luy_ke")} if derived else {}
     found = {row[0]: row[1:] for row in rows}
+    fallback = {}                                           # mã -> kỳ thật sự lấy số (báo cáo quý 4) khi báo cáo năm không có dòng này
+    if re.fullmatch(r"FY20\d\d", period) and not derived:
+        missing_codes = [c for c in companies if c not in found and c != "SBT"]      # SBT: năm tài chính kết thúc 30/6, quý 4 không phải cuối năm
+        if missing_codes:
+            q4 = f"Q4/{period[2:]}"
+            for row in repository.facts(missing_codes, q4, metric, "luy_ke"):
+                found[row[0]] = row[1:]
+                fallback[row[0]] = q4
+    cumulative = {}                                          # có số lũy kế mà không có số riêng quý: nêu số lũy kế (ghi rõ) thay vì nói "chưa có"
+    if basis == "quy" and not derived and metric not in POINT_METRICS and period.startswith("Q"):
+        cumulative = {row[0]: row[1:] for row in repository.facts([c for c in companies if c not in found], period, metric, "luy_ke")}
     label = METRICS[metric][0]
     timing = PERIODS[period]
-    if period.startswith("Q") and metric not in {"tong_tai_san", "no_phai_tra", "von_chu_so_huu", "hang_ton_kho"}:
+    if period.startswith("Q") and metric not in POINT_METRICS:
         timing += " (lũy kế)" if basis == "luy_ke" else " (riêng quý)"
     lines = [f"**{label} · {timing}**", ""]
     sources = []
@@ -210,6 +222,13 @@ def lookup(companies, metric, period, basis="quy"):
         can_derive = (code in found and code in previous
                       and found[code][4] == previous[code][4]
                       and found[code][4] in {"riêng", "hợp nhất"} and code != "SBT")
+        if code in cumulative and code not in found:
+            value, statement, page, url, scope, _ = cumulative[code]
+            lines.append(f"- **{COMPANIES[code][0]} ({code}):** Chưa có số riêng quý đã đối chiếu. Số lũy kế đến hết {PERIODS[period]} là {fmt_ty(value)} tỷ đồng "
+                         f"({fmt_vnd(value)} đồng), {scope_text(scope)}. Nguồn: {STATEMENT_NAMES.get(statement, statement)}, trang {page}.")
+            sources.append(repository.source(code, period, scope, page, url, statement))
+            period_notes.append(f"{code}: báo cáo chỉ có số lũy kế của chỉ tiêu này; hỏi \"lũy kế\" để tra trực tiếp.")
+            continue
         if code not in found or (derived and not can_derive):
             lines.append(f"- **{COMPANIES[code][0]} ({code}):** Chưa có số đã đối chiếu cho lựa chọn này.")
             aliases = (fold(label),)
@@ -220,7 +239,7 @@ def lookup(companies, metric, period, basis="quy"):
             if metric.startswith("dong_tien_"):
                 aliases += (fold(label).replace("luu chuyen tien", "tien"),)
             statement = ("LCTT" if metric.startswith("dong_tien_") else
-                         "CDKT" if metric in {"tong_tai_san", "no_phai_tra", "von_chu_so_huu", "hang_ton_kho"}
+                         "CDKT" if metric in POINT_METRICS
                          else "KQKD")
             excerpts = repository.excerpts(code, period, label, aliases, statement)
             pages = sorted({item["source"]["page"] for item in excerpts})
@@ -241,7 +260,10 @@ def lookup(companies, metric, period, basis="quy"):
         values[code] = value
         lines.append(f"- **{COMPANIES[code][0]} ({code}):** {fmt_ty(value)} tỷ đồng ({fmt_vnd(value)} đồng), {scope_text(scope)}. "
                      f"Nguồn: {STATEMENT_NAMES.get(statement, statement)}, trang {page}.")
-        sources.append(repository.source(code, period, scope, page, url, statement))
+        sources.append(repository.source(code, fallback.get(code, period), scope, page, url, statement))
+        if code in fallback:
+            lines[-1] += f" Số lấy từ báo cáo {PERIODS[fallback[code]]} vì báo cáo năm chưa có dòng này."
+            period_notes.append(f"{code}: số năm lấy từ báo cáo {PERIODS[fallback[code]]} (chưa kiểm toán), có thể lệch nhẹ so với báo cáo năm đã kiểm toán.")
         if scope in {"riêng", "hợp nhất"}:
             scopes.add(scope)
         if difference and basis == "quy":
@@ -255,6 +277,40 @@ def lookup(companies, metric, period, basis="quy"):
         notes.append("Dòng tiền riêng quý được tính bằng lũy kế đến cuối quý trừ lũy kế đến cuối quý trước.")
     notes.extend(dict.fromkeys(period_notes))
     return result("\n".join(lines), sources, notes)
+
+
+UNSUPPORTED_ITEMS = {
+    "phai thu": "các khoản phải thu", "phai tra nguoi ban": "phải trả người bán", "tien va tuong duong tien": "tiền và các khoản tương đương tiền",
+    "tien mat": "tiền mặt", "chi phi ban hang": "chi phí bán hàng", "chi phi quan ly": "chi phí quản lý doanh nghiệp",
+    "chi phi tai chinh": "chi phí tài chính", "chi phi lai vay": "chi phí lãi vay", "lai vay": "chi phí lãi vay",
+    "doanh thu tai chinh": "doanh thu hoạt động tài chính", "khau hao": "khấu hao", "tai san co dinh": "tài sản cố định",
+    "von dieu le": "vốn điều lệ", "co tuc": "cổ tức", "thue thu nhap": "thuế thu nhập doanh nghiệp", "vay ngan han": "vay ngắn hạn",
+    "vay dai han": "vay dài hạn", "no vay": "nợ vay", "loi nhuan khac": "lợi nhuận khác", "dau tu tai chinh": "đầu tư tài chính",
+    "loi ich co dong": "lợi ích cổ đông", "cong ty me": "lợi nhuận/vốn thuộc công ty mẹ",
+}
+SUPPORTED_TEXT = ("doanh thu thuần, giá vốn hàng bán, lợi nhuận gộp, lợi nhuận trước thuế và sau thuế, tổng tài sản, tài sản ngắn hạn và dài hạn, "
+                  "nợ phải trả, nợ ngắn hạn và dài hạn, vốn chủ sở hữu, hàng tồn kho, dòng tiền kinh doanh, đầu tư và tài chính")
+
+
+def unsupported_item(query):
+    """Khoản mục kế toán cụ thể mà dữ liệu chưa có số (vd chi phí bán hàng, phải thu): để trả lời thẳng thay vì đưa bảng tóm tắt không đúng trọng tâm."""
+    return next((label for phrase, label in UNSUPPORTED_ITEMS.items() if matches(query, (phrase,))), None)
+
+
+def unsupported_answer(companies, period, item):
+    names = ", ".join(entity_name(c) for c in companies)
+    lines = [f"**{item.capitalize()} · {PERIODS[period]}** — chưa có số đã đối chiếu của khoản mục này cho {names}."]
+    sources = {}
+    for code in companies:
+        found = repository.excerpts(code, period, item, (fold(item),))
+        pages = sorted({i["source"]["page"] for i in found})
+        if pages:
+            lines.append(f"- {entity_name(code)}: trang có dòng liên quan {', '.join(map(str, pages))} của báo cáo gốc (mở phần Nguồn để xem số trên báo cáo).")
+            sources.update({i["source"]["url"]: i["source"] for i in found})
+        else:
+            sources.update({s["url"]: s for s in report_sources(code, period)})
+    lines += ["", f"Hiện tra cứu được: {SUPPORTED_TEXT}. Hỏi \"thuyết minh về {item}\" để xem phần thuyết minh (chữ OCR, cần đối chiếu PDF)."]
+    return result("\n".join(lines), list(sources.values()), ["Số chưa đối chiếu được nên không hiển thị lại chữ OCR; mở trang nguồn để xem số trên báo cáo gốc."])
 
 
 SUMMARY_METRICS = ("doanh_thu_thuan", "loi_nhuan_gop", "loi_nhuan_sau_thue", "tong_tai_san", "no_phai_tra", "von_chu_so_huu")
@@ -304,7 +360,7 @@ def summary(companies, period):
 COMPARE_METRICS = ("doanh_thu_thuan", "loi_nhuan_gop", "loi_nhuan_truoc_thue", "loi_nhuan_sau_thue", "tong_tai_san", "no_phai_tra", "von_chu_so_huu")
 VNM_QUARTERS = ("Q1/2025", "Q2/2025", "Q3/2025", "Q4/2025", "Q1/2026", "Q2/2026")
 VNM_METRICS = {"dong_tien_kinh_doanh": "luu_chuyen_hdkd", "dong_tien_dau_tu": "luu_chuyen_dau_tu", "dong_tien_tai_chinh": "luu_chuyen_tai_chinh"}
-POINT_METRICS = {"tong_tai_san", "no_phai_tra", "von_chu_so_huu", "hang_ton_kho"}
+POINT_METRICS = {"tong_tai_san", "no_phai_tra", "von_chu_so_huu", "hang_ton_kho", "tai_san_ngan_han", "tai_san_dai_han", "no_ngan_han", "no_dai_han"}
 WIDE_LIMIT = 4                                             # tới 4 bên: mỗi bên một cột; nhiều hơn: mỗi công ty một dòng, xếp hạng
 
 
@@ -525,7 +581,7 @@ def _series_charts(codes, metrics, basis, off_scope=()):
     try:
         from src.consumer import analytics
         from src.tools.registry import analyst
-        blocks = analytics.chart(list(codes), [m for m in metrics if m in METRICS], "series", None, basis, "yoy", analyst())
+        blocks = analytics.chart(list(codes), [m for m in metrics if m in _catalog.METRICS], "series", None, basis, "yoy", analyst())
     except Exception:                                           # noqa: BLE001 - biểu đồ chỉ là phần thêm, không được làm hỏng câu trả lời
         return []
     for block in blocks:
@@ -843,7 +899,7 @@ def latest_period(companies):
 def answer_question(question, companies, selected_period=None, context=None):
     # The UI appends Vinamilk's default period to legacy chat requests.
     question = question.split("\n(Nếu không nêu kỳ,", 1)[0]
-    question = re.sub(r"(?i)\bnợ\b(?!\s+(?:phải|xấu|vay))", "nợ phải trả", question)      # "nợ" đứng riêng: bỏ dấu sẽ thành "no", nên đổi trước khi fold
+    question = re.sub(r"(?i)\bnợ\b(?!\s+(?:phải|xấu|vay|ngắn|dài))", "nợ phải trả", question)      # "nợ" đứng riêng: bỏ dấu sẽ thành "no", nên đổi trước khi fold
     query = fold(question)
     periods = requested_periods(question)
     if companies == ["SBT"]:
@@ -924,6 +980,8 @@ def answer_for_period(query, companies, period):
         answer = "\n\n".join(f"**{item['source']['doc']} · trang {item['source']['page']}**\n\n{item['text']}" for item in excerpts)
         return result(answer, [item["source"] for item in excerpts], ["Trích đoạn OCR. Đối chiếu báo cáo gốc nếu cần dùng số liệu."])
     metrics = question_metrics(query)
+    if not metrics and not asks_ratio(query) and (item := unsupported_item(query)):
+        return unsupported_answer(companies, period, item)
     if not metrics and not asks_ratio(query):
         reply = summary(companies, period)
         if len(companies) == 1 and "| Chỉ tiêu |" in reply["answer"]:               # tóm tắt một công ty: thêm nhận định so với kỳ trước và nhóm doanh nghiệp

@@ -179,7 +179,7 @@ def main():
     assert "không trả lời về giá cổ phiếu" in stock["answer"]
     # KDC: báo cáo năm chỉ có kết quả kinh doanh; bảng cân đối cuối năm lấy từ báo cáo quý 4
     kido = client.post("/api/ask", json={"question": "KIDO và Vinamilk công ty nào lãi hơn năm 2025"}).json()
-    assert "| Tổng tài sản (tỷ đồng) | 53.312,4 | 13.980,8 |" in kido["answer"], kido["answer"]
+    assert "| Tổng tài sản (tỷ đồng) | 53.312,4 | 13.907,2 |" in kido["answer"], kido["answer"]      # số KIDO là báo cáo năm đã kiểm toán (13.907,2); 13.980,8 là báo cáo quý 4 chưa kiểm toán
     # phạm vi không rõ thì không viết "báo cáo theo báo cáo"
     debt = client.post("/api/ask", json={"question": "nợ của Habeco quý 1/2026 là bao nhiêu"}).json()
     assert "báo cáo theo báo cáo" not in debt["answer"] and "1.742,6" in debt["answer"]

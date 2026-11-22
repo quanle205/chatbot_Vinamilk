@@ -20,7 +20,7 @@ def test_dev_and_validation_sets_are_disjoint_and_complete():
     assert not ({c["question"] for c in dev} & {c["question"] for c in val})
     assert not ({c["id"] for c in dev} & {c["id"] for c in val})
     categories = {c["category"] for c in dev}
-    assert categories == {c["category"] for c in val} and len(categories) >= 12      # cùng các nhóm câu hỏi ở cả hai tập
+    assert {c["category"] for c in val} <= categories and len(categories) >= 12      # tập kiểm chứng không có nhóm nào lạ so với tập dev (dev có thêm nhóm viết sau khi tìm ra lỗi)
     for case in dev + val:
         assert case["behavior"] in {"answer", "refuse", "no_data"}
         if case["behavior"] == "answer":

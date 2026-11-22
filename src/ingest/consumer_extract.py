@@ -90,6 +90,45 @@ def _cells(box: list) -> list:
     return [(box[0] + (box[2] - box[0]) * start / len(text), part) for start, part in parts]
 
 
+def has_gutter(boxes: list) -> bool:
+    """Trang có khe trống dọc ở giữa và chữ ở cả hai nửa (hai trang A5 in cạnh nhau trên một trang PDF, vd báo cáo thường niên)?"""
+    if len(boxes) < 40:
+        return False
+    crossing = [b for b in boxes if b[0] < 0.53 and b[2] > 0.47]
+    left = [b for b in boxes if b[2] <= 0.5]
+    right = [b for b in boxes if b[0] >= 0.5]
+    return len(crossing) <= len(boxes) * 0.03 and len(left) >= 20 and len(right) >= 20
+
+
+def half_page(boxes: list, side: int) -> list:
+    """Nửa trái (side 1) hoặc phải (side 2) của một trang hai nửa, tọa độ x chuẩn hóa lại về 0-1 để các quy tắc theo vị trí cột dùng được như với trang đơn."""
+    offset = 0.0 if side == 1 else 0.5
+    return [[(b[0] - offset) * 2, b[1], (b[2] - offset) * 2, b[3], *b[4:]] for b in boxes
+            if (b[2] <= 0.5 if side == 1 else b[0] >= 0.5)]
+
+
+def expand_spreads(pages: dict) -> dict:
+    """{khóa: các ô chữ} với khóa = số trang x 10 + phần (0 nguyên trang, 1 nửa trái, 2 nửa phải). Chỉ THÊM các nửa trang làm ứng viên bên cạnh trang gốc,
+    nên trang bình thường không đổi; mọi số vẫn phải thỏa đẳng thức mới được nhận."""
+    out = {}
+    for page, boxes in pages.items():
+        out[page * 10] = boxes
+        if has_gutter(boxes):
+            out[page * 10 + 1], out[page * 10 + 2] = half_page(boxes, 1), half_page(boxes, 2)
+    return out
+
+
+def next_key(key: int, pages: dict):
+    """Trang đứng sau theo thứ tự đọc: nửa trái -> nửa phải -> (nửa trái của) trang kế; trang đơn -> trang kế."""
+    page, side = divmod(key, 10)
+    if side == 1 and key + 1 in pages:
+        return key + 1
+    for candidate in ((page + 1) * 10 + 1, (page + 1) * 10):
+        if candidate in pages:
+            return candidate
+    return None
+
+
 def _row_numbers(boxes: list, code: str) -> list:
     """Các dòng có mã `code`: mỗi dòng là danh sách (x, giá trị) của các số cùng hàng, cột trái sang phải (cho phép thiếu số do OCR bỏ sót)."""
     rows = []
@@ -158,8 +197,8 @@ def _balance(pages: dict) -> dict:
     Chỉ dùng cột cuối kỳ (cột đầu): tài sản = nợ phải trả + vốn chủ sở hữu, ba số 12-13 chữ số nên khớp tình cờ gần như không thể. Cột "đầu năm"
     hay bị OCR đọc nhiễu; dòng chỉ thiếu cột đó vẫn dùng được nhờ căn cột theo tọa độ (aligned_rows). Chỉ nhận khi đúng một giá trị tổng tài sản thỏa.
     """
-    codes = ("140", "141", "149", "270", "280", "300", "400", "440")
-    anchors = ("100", "110", "120", "130", "200", "210", "220", "230", "310", "330", "410", "411", "420", "421")      # chỉ để xác định vị trí hai cột
+    codes = ("140", "141", "149", "270", "280", "300", "400", "440", "100", "200", "310", "330")
+    anchors = ("110", "120", "130", "210", "220", "230", "410", "411", "420", "421")      # chỉ để xác định vị trí hai cột
     cells = {code: {} for code in codes}
     for page, boxes in pages.items():
         if scaled_units(page_header(boxes)):
@@ -173,6 +212,11 @@ def _balance(pages: dict) -> dict:
     assets = {**cells["270"], **cells["280"]}
     valid = {(a, d, e) for a, d, e in product(assets, cells["300"], cells["400"])
              if a == d + e and ASSET_RANGE[0] <= a <= ASSET_RANGE[1]}
+    if not valid:                                               # dòng tổng tài sản không đọc được: tổng tài sản luôn bằng tổng nguồn vốn (440) = nợ phải trả + vốn chủ sở hữu
+        valid = {(a, d, e) for a, d, e in product(cells["440"], cells["300"], cells["400"])
+                 if a == d + e and ASSET_RANGE[0] <= a <= ASSET_RANGE[1]}
+        if valid:
+            assets = dict(cells["440"])
     if not valid:                                               # một trong ba số bị OCR hỏng: suy ra từ hai số kia, chỉ nhận khi ô hỏng đối chứng khớp
         usable = {p: b for p, b in pages.items() if not scaled_units(page_header(b))}
         for a, d in product(assets, cells["300"]):
@@ -201,20 +245,54 @@ def _balance(pages: dict) -> dict:
         match = [v for v in cells["140"] if any(s_ + r_ == v for s_ in cells["141"] for r_ in cells["149"])]
         if len(match) == 1:
             rows["hang_ton_kho"], pages_of["hang_ton_kho"] = match[0], cells["140"][match[0]]
+    for total, parts, names in ((a, ("100", "200"), ("tai_san_ngan_han", "tai_san_dai_han")), (d, ("310", "330"), ("no_ngan_han", "no_dai_han"))):
+        pairs = {(x, y) for x in cells[parts[0]] for y in cells[parts[1]] if x + y == total}      # ngắn hạn + dài hạn = tổng: chỉ nhận khi đúng một cặp
+        if len(pairs) == 1:
+            x, y = next(iter(pairs))
+            rows[names[0]], rows[names[1]] = x, y
+            pages_of[names[0]], pages_of[names[1]] = cells[parts[0]][x], cells[parts[1]][y]
     return {(metric, "point"): (value, pages_of[metric], scope, "CDKT") for metric, value in rows.items()}
 
 
-def balanced_income(candidates: dict) -> dict:
+def number_cells(boxes: list) -> set:
+    """Mọi số (đã đọc được thành số, từ 7 chữ số trở lên) xuất hiện trên trang, kể cả số do OCR gộp nhiều cột trong một ô."""
+    out = set()
+    for box in boxes:
+        for _, cell in _cells(box):
+            value = amount(cell)
+            if value is not None and len(cell) >= 7:
+                out.add(abs(value))
+    return out
+
+
+def derive_gross(candidates: dict, known: set) -> set:
+    """{(doanh thu, lợi nhuận gộp)} khi dòng 10, 11 hoặc 20 bị OCR bỏ sót: hai số còn lại suy ra số thứ ba (10 - |11| = 20),
+    chỉ nhận khi số suy ra xuất hiện ĐÚNG như một ô số trên trang (ba số độc lập khớp nhau nên trùng hợp ngẫu nhiên gần như không thể)."""
+    out = set()
+    if not candidates["20"]:
+        out |= {(rev, rev - abs(cost)) for rev, cost in product(candidates["10"], candidates["11"])
+                if rev > 0 and cost != 0 and rev - abs(cost) in known}
+    if not candidates["10"]:
+        out |= {(profit + abs(cost), profit) for cost, profit in product(candidates["11"], candidates["20"])
+                if cost != 0 and profit + abs(cost) in known}
+    if not candidates["11"]:
+        out |= {(rev, profit) for rev, profit in product(candidates["10"], candidates["20"]) if rev > 0 and 0 < rev - profit and rev - profit in known}
+    return out
+
+
+def balanced_income(candidates: dict, known: set | None = None) -> dict:
     """Doanh thu thuần / lợi nhuận gộp / trước thuế / sau thuế, mỗi giá trị chỉ nhận khi thỏa đẳng thức của chính báo cáo (một giá trị duy nhất).
 
     gộp: 10 - |11| = 20 · trước thuế: 30 + 40 = 50 · sau thuế: 50 -/+ (51 + 52) = 60, hoặc kiểm tra độc lập 61 + 62 = 60.
     """
     gross = {(revenue, profit) for revenue, cost, profit in product(candidates["10"], candidates["11"], candidates["20"])
              if revenue > 0 and cost != 0 and revenue - abs(cost) == profit}
+    if not gross and known:
+        gross = derive_gross(candidates, known)
     if len(gross) != 1:
         return {}
     revenue, gross_profit = gross.pop()
-    rows = {"doanh_thu_thuan": revenue, "loi_nhuan_gop": gross_profit}
+    rows = {"doanh_thu_thuan": revenue, "loi_nhuan_gop": gross_profit, "gia_von": revenue - gross_profit}
     pretax = {total for earnings, other, total in product(candidates["30"], candidates["40"], candidates["50"]) if earnings + other == total}
     if len(pretax) == 1:
         total = pretax.pop()
@@ -244,9 +322,12 @@ def _income(pages: dict, period: str, company: str) -> dict:
             if count == 2 and not (annual or period.startswith("Q1")):
                 continue                                       # Q2-Q4 chỉ hai cột: không biết là riêng quý hay lũy kế
             candidates = aligned_rows(boxes, codes, count)
-            if page + 1 in pages and not scaled_units(page_header(pages[page + 1])):          # báo cáo trải trên hai trang (vd 01-40 rồi 50-60)
-                following = aligned_rows(pages[page + 1], codes, count)
+            known = number_cells(boxes)
+            nxt = next_key(page, pages)
+            if nxt is not None and not scaled_units(page_header(pages[nxt])):                 # báo cáo trải trên hai trang (vd 01-40 rồi 50-60)
+                following = aligned_rows(pages[nxt], codes, count)
                 candidates = {code: candidates[code] + following[code] for code in codes}
+                known |= number_cells(pages[nxt])
             if annual:
                 bases = {"annual": 0}
             elif count == 4:
@@ -255,7 +336,7 @@ def _income(pages: dict, period: str, company: str) -> dict:
                 bases = {"quy": 0, "luy_ke": 0}
             for basis, column in bases.items():
                 options = {code: {row[column] for row in rows if row[column] is not None} for code, rows in candidates.items()}
-                for metric, value in balanced_income(options).items():
+                for metric, value in balanced_income(options, known).items():
                     found.setdefault((metric, basis), {})[value] = (page, scope_of(header))
     out = {}
     for (metric, basis), values in found.items():
@@ -292,8 +373,9 @@ def _cash_flow(pages: dict, period: str, company: str) -> dict:
 
 def extract_document(pages: dict, company: str, period: str) -> dict:
     """{(metric, basis): (giá trị, trang, phạm vi, báo cáo)} cho một tài liệu; `pages` = {số trang: các ô chữ OCR}."""
+    expanded = expand_spreads(pages)
     rows = {}
-    rows.update(_balance(pages))
-    rows.update(_income(pages, period, company))
-    rows.update(_cash_flow(pages, period, company))
-    return rows
+    rows.update(_balance(expanded))
+    rows.update(_income(expanded, period, company))
+    rows.update(_cash_flow(expanded, period, company))
+    return {key: (value, page // 10, scope, statement) for key, (value, page, scope, statement) in rows.items()}      # khóa nửa trang -> số trang PDF
