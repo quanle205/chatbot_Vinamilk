@@ -63,6 +63,19 @@ def get_agent() -> VinamilkAgent:
     return _agent
 
 
+def gemini_ready() -> bool:
+    return bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
+
+
+def agent_reply(question: str, history, skip_filters: bool = False) -> dict:
+    """Hỏi trợ lý Gemini (công cụ của cả 12 công ty). Nguồn của công cụ công ty đã ở dạng giao diện ("ready"); nguồn của Vinamilk gộp qua source_links."""
+    contents = [types.Content(role=t.role, parts=[types.Part(text=t.text)]) for t in history[-2 * MAX_HISTORY_TURNS:]]
+    r = get_agent().ask(question, contents, skip_filters=skip_filters)
+    ready = [{k: v for k, v in s.items() if k != "ready"} for s in r.sources if s.get("ready")]
+    return {"answer": r.answer, "sources": [*ready, *source_links([s for s in r.sources if not s.get("ready")])], "notes": collect_notes(r.tool_calls),
+            "warnings": r.warnings, "unsupported_numbers": r.unsupported_numbers, "charts": build_charts(r.tool_calls), "clarify": r.clarify, "suggestions": []}
+
+
 @app.get("/api/health")
 def health():
     try:
@@ -93,7 +106,13 @@ def ask(body: AskBody, request: Request):
     if companies:
         if service.out_of_scope(body.question, follow_up=bool(body.history or body.company)):   # giá cổ phiếu, tư vấn đầu tư...: nhánh tra cứu công ty cũng phải từ chối
             return service.result("Mình chỉ trả lời về số liệu và nội dung trong báo cáo tài chính của các công ty trong danh mục; không trả lời về giá cổ phiếu, dự báo hay tư vấn đầu tư.")
-        return service.answer_question(body.question, companies, body.company_period, context)
+        reply = service.answer_question(body.question, companies, body.company_period, context)
+        if reply.get("weak") and gemini_ready():                   # nhánh quy tắc không tìm được câu trả lời chắc chắn: để Gemini đọc kỹ hơn bằng công cụ của cả 12 công ty
+            try:
+                return agent_reply(body.question, body.history, skip_filters=True)
+            except Exception:                                      # noqa: BLE001 - Gemini lỗi/hết lượt cả ba mô hình: vẫn trả câu trả lời của nhánh quy tắc
+                pass
+        return reply
     if service.wants_document(catalog.fold(body.question.split("\n(Nếu không nêu kỳ,", 1)[0]), strict=True):   # người, hồ sơ công ty, hoạt động của Vinamilk: tra chữ trong PDF
         return service.document_answer(body.question, [], True)
     gap = service.vinamilk_period_gap(body.question)          # kỳ ngoài dữ liệu của Vinamilk: trả lời tức thì
@@ -104,9 +123,8 @@ def ask(body: AskBody, request: Request):
     topic = service.vinamilk_assessment(body.question)       # "Vinamilk có khả năng thanh toán nợ tốt không?": đánh giá bằng số, không cần Gemini
     if topic:
         return service.assess_answer(body.question, [], True, topic)
-    contents = [types.Content(role=t.role, parts=[types.Part(text=t.text)]) for t in body.history[-2 * MAX_HISTORY_TURNS:]]
     try:
-        r = get_agent().ask(body.question, contents)
+        return agent_reply(body.question, body.history)
     except AgentConfigError:
         raise HTTPException(503, "Trợ lý chưa sẵn sàng. Bạn vẫn có thể dùng mục Tra cứu số liệu.")
     except Exception as e:                                                   # noqa: BLE001 - không lộ chi tiết kỹ thuật ra ngoài
@@ -114,8 +132,6 @@ def ask(body: AskBody, request: Request):
         if code == 429:
             raise HTTPException(429, "Trợ lý đang tạm hết lượt sử dụng. Bạn thử lại sau hoặc dùng mục Tra cứu số liệu.")
         raise HTTPException(502, "Trợ lý đang bận hoặc gặp sự cố tạm thời. Bạn thử lại sau ít phút nhé.")
-    return {"answer": r.answer, "sources": source_links(r.sources), "notes": collect_notes(r.tool_calls), "warnings": r.warnings,
-            "unsupported_numbers": r.unsupported_numbers, "charts": build_charts(r.tool_calls), "clarify": r.clarify}
 
 
 @app.get("/api/consumer/catalog")

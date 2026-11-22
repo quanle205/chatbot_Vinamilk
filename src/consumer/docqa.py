@@ -219,11 +219,13 @@ def window_coverage(text: str, weights: dict[str, int], size: int = 3) -> float:
         window = " ".join(lines[i:i + size])
         present = {t for t in weights if re.search(rf"(?<!\w){re.escape(t)}(?!\w)", window)}
         fraction = sum(weights[t] for t in present) / total
+        if rare and len(rare & present) * 2 < len(rare):
+            fraction *= 0.5                                         # thiếu quá nửa từ hiếm (từ phân biệt của câu hỏi): chỉ khớp từ thông dụng thì không đáng tin
         best = max(best, 1.0 if rare <= present and fraction >= 2 / 3 else fraction * 0.9)
     return best
 
 
-def search(code: str, question: str, limit: int = MAX_PASSAGES) -> list[Passage]:
+def search(code: str, question: str, limit: int = MAX_PASSAGES, min_coverage: float = MIN_COVERAGE) -> list[Passage]:
     """Các đoạn PDF liên quan nhất, đã lọc theo độ phủ từ khóa; rỗng nếu PDF không có chữ nào đủ liên quan."""
     passages, index, folded = corpus(code)
     terms = focus_terms(question, code)
@@ -243,7 +245,7 @@ def search(code: str, question: str, limit: int = MAX_PASSAGES) -> list[Passage]
         if musts and not has_phrase(text, musts):
             continue                                       # câu hỏi nêu rõ chủ đề (vd chủ tịch) mà đoạn không nhắc đến thì bỏ
         coverage = window_coverage(text, weights)
-        if coverage < MIN_COVERAGE:
+        if coverage < min_coverage:
             continue
         recency = PERIOD_ORDER.get(p.period, 0) / max(PERIOD_ORDER.values())
         clean = 1 - min(0.85, 4 * noise(p.text))                    # trang OCR nhiễu bị đẩy xuống: ưu tiên trang đọc rõ để trích dẫn đáng tin
@@ -479,7 +481,7 @@ def answer(code: str, question: str, llm=None) -> dict:
         tips = suggestions(code, question)
         if tips:
             text += "\n\nBạn có thể thử các câu hỏi tương tự mà PDF của " + name + " có nội dung:"
-        return {"text": text, "sources": [], "notes": notes, "suggestions": tips, "found": False}
+        return {"text": text, "sources": [], "notes": notes, "suggestions": tips, "found": False, "weak": True}
     terms = focus_terms(question, code)
     direct = role_answer(code, question, passages)
     passages = passages[:MAX_PASSAGES]
@@ -487,7 +489,7 @@ def answer(code: str, question: str, llm=None) -> dict:
         text, evidence = direct
         text += "\n\n" + quote_block(evidence, terms, limit=2)
         notes.append("Tên và chức danh trích đúng từ chữ trong PDF (văn bản OCR); mở Nguồn để đối chiếu.")
-        return {"text": text, "sources": [source_of(p) for p in evidence[:3]], "notes": notes, "suggestions": [], "found": True}
+        return {"text": text, "sources": [source_of(p) for p in evidence[:3]], "notes": notes, "suggestions": [], "found": True, "weak": False}
     summary = ""
     if llm is not None:
         try:
@@ -507,4 +509,4 @@ def answer(code: str, question: str, llm=None) -> dict:
             f"**Các đoạn gần nhất trong báo cáo của {name}** (chỉ khớp một phần câu hỏi, có thể chưa đúng ý bạn):\n\n")
     text = head + quote_block(passages, terms)
     notes.append("Chữ trích từ PDF là văn bản OCR, có thể sai dấu hoặc ký tự; mở Nguồn để đối chiếu với trang gốc.")
-    return {"text": text, "sources": [source_of(p) for p in passages[:MAX_PASSAGES]], "notes": notes, "suggestions": [], "found": True}
+    return {"text": text, "sources": [source_of(p) for p in passages[:MAX_PASSAGES]], "notes": notes, "suggestions": [], "found": True, "weak": not strong}

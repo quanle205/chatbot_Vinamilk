@@ -136,6 +136,7 @@ def document_answer(question, companies, with_vinamilk=False):
     notes = list(dict.fromkeys(n for r in replies for n in r["notes"]))
     reply = result(text, sources, notes)
     reply["suggestions"] = [t for r in replies for t in r["suggestions"]][:4]
+    reply["weak"] = any(r["weak"] for r in replies)        # không tìm thấy hoặc chỉ khớp một phần: để trợ lý Gemini (nếu có) đọc kỹ hơn
     return reply
 
 

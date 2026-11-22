@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from google.genai import types  # noqa: E402
 
-from src.agent.agent import QUICK_TIMEOUT_MS, REFUSAL_TEXT, AgentConfigError, ToolCall, VinamilkAgent, _clean_schema, make_client  # noqa: E402
+from src.agent.agent import QUICK_TIMEOUT_MS, REFUSAL_TEXT, AgentConfigError, ModelUnavailable, ToolCall, VinamilkAgent, _clean_schema, make_client  # noqa: E402
 from src.agent.answer import tidy_answer, used_sources  # noqa: E402
 from src.agent.guard import find_unsupported_numbers, numbers_in_text  # noqa: E402
 from src.agent.prompts import SYSTEM_PROMPT  # noqa: E402
@@ -213,11 +213,46 @@ def test_last_model_is_still_retried_and_pinned_model_is_never_switched():
     assert a.ask("q").model == "du-phong" and [c["model"] for c in a.client.calls] == ["du-phong"] * 3
     b = agent([HttpError(503)] * 3, model="chinh", fallback_models=("du-phong",), retry_delays=(0, 0))
     try:
-        b._generate([], "chinh")                                                        # đã ghim (giữa vòng công cụ): chỉ thử lại đúng mô hình đó rồi ném lỗi
-        raise AssertionError("phải ném lỗi")
-    except HttpError:
-        pass
+        b._generate([], "chinh")                                                        # đã ghim (giữa vòng công cụ): chỉ thử lại đúng mô hình đó rồi báo để làm lại trên mô hình khác
+        raise AssertionError("phải báo ModelUnavailable")
+    except ModelUnavailable as e:
+        assert isinstance(e.original, HttpError)
     assert [c["model"] for c in b.client.calls] == ["chinh"] * 3
+
+
+def test_quota_exhausted_in_the_middle_of_tool_calls_restarts_the_question_on_the_next_model():
+    """Hết lượt giữa vòng gọi công cụ: tự làm lại câu hỏi từ đầu trên mô hình kế tiếp, người dùng không thấy lỗi."""
+    script = [resp([call("get_metric", metric="tong tai san", period="Q1/2026")]), HttpError(429),
+              resp([call("get_metric", metric="tong tai san", period="Q1/2026")]), resp([text("Tổng tài sản quý 1/2026 đã tra xong.")])]
+    a = agent(script, model="a", fallback_models=("b",), retry_delays=(0, 0))
+    hist = []
+    r = a.ask("Tổng tài sản Q1/2026?", hist)
+    assert r.answer.startswith("Tổng tài sản quý 1/2026") and r.model == "b" and [c["model"] for c in a.client.calls] == ["a", "a", "b", "b"], [c["model"] for c in a.client.calls]
+    assert len(r.tool_calls) == 1 and [h.role for h in hist] == ["user", "model"]          # chỉ còn hỏi + đáp, không dư lượt của lần làm dở
+    assert a._cooldown["a"] > time.monotonic()                                           # mô hình hết lượt được nghỉ cho các câu sau
+    b = agent([resp([call("get_metric", metric="tong tai san", period="Q1/2026")]), HttpError(429), resp([call("get_metric", metric="x", period="Q1/2026")]), HttpError(429)],
+              model="a", fallback_models=("b",), retry_delays=(0, 0))
+    try:
+        b.ask("q")
+        raise AssertionError("hết cả hai mô hình phải ném lỗi 429")
+    except HttpError as e:
+        assert e.code == 429
+
+
+def test_company_tools_cover_all_eleven_other_companies():
+    box = Toolbox(retriever=object())
+    names = {s["name"] for s in box.specs}
+    assert {"list_companies", "get_company_metric", "get_company_ratio", "get_company_growth", "get_company_series", "search_company_documents"} <= names
+    listing = box.run("list_companies", {})
+    assert listing["ok"] and all(code in listing["text"] for code in ("VNM", "MCH", "KDC", "SAB", "SBT", "VCF"))
+    metric = box.run("get_company_metric", {"company": "Masan", "metric": "doanh thu thuần", "period": "Q2/2026"})
+    assert metric["ok"] and "7.165,0 tỷ đồng" in metric["text"] and metric["sources"] and all(s["ready"] for s in metric["sources"]), metric
+    assert box.run("get_company_metric", {"company": "Coca Cola", "metric": "doanh thu", "period": "Q2/2026"})["ok"] is False
+    assert box.run("get_company_metric", {"company": "VNM", "metric": "doanh thu", "period": "Q2/2026"})["ok"] is False        # Vinamilk có công cụ riêng
+    chair = box.run("search_company_documents", {"company": "MCH", "query": "chủ tịch hội đồng quản trị"})
+    assert chair["ok"] and "Danny Le" in chair["text"] and chair["sources"], chair["text"][:300]
+    nothing = box.run("search_company_documents", {"company": "KDC", "query": "phi thuyền thiên hà ngoài hành tinh"})
+    assert nothing["ok"] is False
 
 
 def test_quota_or_missing_model_falls_through_but_bad_request_does_not():

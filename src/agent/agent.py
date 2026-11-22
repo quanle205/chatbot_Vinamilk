@@ -50,6 +50,14 @@ def claims_false_no_data(question: str, answer: str) -> bool:
     return bool(find_periods(question)[0] & SUPPORTED_DOCS) and bool(NO_DATA_CLAIM.search(answer))
 
 
+class ModelUnavailable(Exception):
+    """Mô hình đang được ghim giữa vòng gọi công cụ bị hết hạn mức/quá tải: câu hỏi phải làm lại từ đầu trên mô hình khác."""
+
+    def __init__(self, original: Exception):
+        super().__init__(str(original))
+        self.original = original
+
+
 class AgentConfigError(RuntimeError):
     """Thiếu cấu hình để gọi Gemini."""
 
@@ -168,6 +176,9 @@ class VinamilkAgent:
                     if switch:
                         self._cooldown[model] = time.monotonic() + COOLDOWN_BY_CODE.get(code, COOLDOWN_S)
                         break                                              # sang mô hình dự phòng
+                    if pinned and code in FALLTHROUGH_CODES:               # hết lượt giữa vòng gọi công cụ: không đổi mô hình trong lượt này được, nên báo để làm lại từ đầu
+                        self._cooldown[model] = time.monotonic() + COOLDOWN_BY_CODE.get(code, COOLDOWN_S)
+                        raise ModelUnavailable(e) from e
                     raise
         raise first_error
 
@@ -176,20 +187,34 @@ class VinamilkAgent:
         from ..train.intent import get_classifier               # nạp muộn: scikit-learn chỉ cần khi bật bộ lọc
         return get_classifier().is_out_of_scope(question)
 
-    def ask(self, question: str, history: list | None = None) -> AgentResult:
-        """Hỏi một câu. `history` là lịch sử hội thoại (được nối thêm tại chỗ); None = hội thoại mới.
+    def ask(self, question: str, history: list | None = None, skip_filters: bool = False) -> AgentResult:
+        """Hỏi một câu; mô hình hết lượt/quá tải thì tự chuyển sang mô hình kế tiếp, kể cả khi đang giữa vòng gọi công cụ (làm lại câu hỏi từ đầu, công cụ chạy lại rất nhanh).
+
+        `skip_filters`: bỏ qua bộ lọc ý định và hỏi lại (dùng khi câu hỏi đã được nhánh khác nhận là hợp lệ).
+        """
+        self._deadline = time.monotonic() + self.deadline_s if self.deadline_s else None
+        contents = history if history is not None else []
+        for attempt in range(max(1, len(self.models))):
+            try:
+                return self._ask_once(question, contents, skip_filters)
+            except ModelUnavailable as unavailable:
+                out_of_time = self._deadline is not None and time.monotonic() > self._deadline
+                if attempt >= len(self.models) - 1 or out_of_time:
+                    raise unavailable.original
+        raise RuntimeError("không tới được")                                # pragma: no cover
+
+    def _ask_once(self, question: str, contents: list, skip_filters: bool = False) -> AgentResult:
+        """Một lượt hỏi trên mô hình hiện tại. `history` là lịch sử hội thoại (được nối thêm tại chỗ); None = hội thoại mới.
 
         Trong một câu hỏi, các `Content` Gemini trả về (kể cả chữ ký suy luận) được giữ nguyên để vòng gọi công cụ
         chạy đúng. Khi câu hỏi xong, lịch sử chỉ còn câu hỏi và câu trả lời dạng văn bản: ngắn gọn hơn, và cho phép
         câu sau dùng mô hình khác. Nếu có lỗi giữa chừng, lịch sử trở về trạng thái trước câu hỏi.
         """
-        self._deadline = time.monotonic() + self.deadline_s if self.deadline_s else None
-        contents = history if history is not None else []
-        if self.intent_filter and self._out_of_scope(question):
+        if self.intent_filter and not skip_filters and self._out_of_scope(question):
             contents.append(types.Content(role="user", parts=[types.Part(text=question)]))
             contents.append(types.Content(role="model", parts=[types.Part(text=REFUSAL_TEXT)]))
             return AgentResult(answer=REFUSAL_TEXT, stop_reason="OUT_OF_SCOPE", model="intent-classifier")
-        if self.clarify and (c := needs_clarification(question, contents)):
+        if self.clarify and not skip_filters and (c := needs_clarification(question, contents)):
             contents.append(types.Content(role="user", parts=[types.Part(text=question)]))
             contents.append(types.Content(role="model", parts=[types.Part(text=c.question)]))
             return AgentResult(answer=c.question, clarify=c.as_dict(), stop_reason="CLARIFY", model="clarifier")

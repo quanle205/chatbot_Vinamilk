@@ -30,7 +30,8 @@ class Toolbox:
 
     @property
     def specs(self) -> list[dict]:
-        return [*TOOL_SPECS, SEARCH_SPEC]
+        from ..consumer import agent_tools                        # nạp muộn: kéo theo DuckDB và bộ chỉ mục tài liệu của 11 công ty
+        return [*TOOL_SPECS, SEARCH_SPEC, *agent_tools.SPECS]
 
     @property
     def retriever(self):
@@ -42,6 +43,9 @@ class Toolbox:
     def run(self, name: str, args: dict) -> dict:
         if name == "search_documents":
             return self._search(args)
+        from ..consumer import agent_tools
+        if name in agent_tools.NAMES:
+            return agent_tools.run(name, args)
         return call_tool(name, args)
 
     def _search(self, args: dict) -> dict:
