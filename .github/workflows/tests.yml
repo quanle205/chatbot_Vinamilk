@@ -1,0 +1,32 @@
+name: tests
+
+on:
+  push:
+    branches: [main, "feature/**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Cài thư viện
+        run: pip install -r requirements.txt httpx
+      - name: Kiểm thử (không gọi mạng, không cần khóa Gemini)
+        run: |
+          set -e
+          for t in tests/test_*.py; do
+            echo "== $t"
+            python "$t"
+          done
+      - name: Đánh giá nhánh công ty (offline; tập dev và tập kiểm chứng)
+        run: |
+          python eval/company_eval.py --golden eval/golden_companies.jsonl --min-pass 0.95
+          python eval/company_eval.py --golden eval/validation_companies.jsonl --min-pass 0.95

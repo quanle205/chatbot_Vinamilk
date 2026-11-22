@@ -22,6 +22,12 @@ tăng trưởng, vẽ xu hướng. Số liệu lấy từ PDF bằng OCR, đã �
 
 ## Tính năng
 
+- **Trò chuyện về 12 công ty (Vinamilk và 11 công ty hàng tiêu dùng):** câu hỏi nêu tên công ty được trả lời bằng quy tắc xác định từ số đã đối chiếu (không cần Gemini, tức thì, lặp lại được); câu hỏi chỉ về Vinamilk dùng Gemini + công cụ, trừ các loại dưới đây cũng dùng quy tắc.
+  Hỗ trợ (cả công ty ngoài Vinamilk): tra số kèm trang PDF; **xếp hạng theo đúng tỷ số được hỏi** (biên gộp, trước thuế, ròng, nợ/vốn chủ, nợ/tài sản; ghi rõ bên nào thiếu và vì sao); **tăng trưởng** so với cùng kỳ hoặc quý trước;
+  **"vì sao lợi nhuận đổi"** bằng cầu nối doanh thu → biên gộp → chi phí khác → thuế (tổng các khoản mục đúng bằng chênh lệch; không suy đoán nguyên nhân kinh doanh); **câu đánh giá** ("sinh lời tốt không", "có an toàn về nợ không")
+  so với chính công ty ở cùng kỳ năm trước và với nhóm doanh nghiệp có số cùng kỳ (xếp hạng, trung vị, xu hướng; không phải khuyến nghị đầu tư); xu hướng qua các quý kèm biểu đồ; so sánh Vinamilk với công ty khác.
+  Hai kỳ khác phạm vi báo cáo (riêng và hợp nhất) không bị tính tăng trưởng hay vẽ nối với nhau. Số chưa đối chiếu không bị in lại chữ OCR, chỉ chỉ trang nguồn. Kỳ Vinamilk chưa có báo cáo (vd Q3/2026) được trả lời ngay mà không gọi Gemini.
+  Mã: `src/consumer/service.py` (định tuyến), `insight.py` (tỷ số, xếp hạng), `growth.py` (tăng trưởng, cầu nối), `assess.py` (đánh giá).
 - **Phân tích (một mục, hai tab):** danh sách 12 doanh nghiệp luôn hiện, mặc định chọn đủ (có nút Chọn/Bỏ chọn tất cả) và dùng chung cho cả hai tab.
   *Xu hướng & so sánh:* xu hướng theo quý vẽ các doanh nghiệp trên cùng một biểu đồ nhiều đường kèm bảng doanh nghiệp × kỳ; "So sánh hai kỳ" cho thay đổi tuyệt đối và % từng doanh nghiệp; "So sánh cùng kỳ" vẽ cột; "Phân rã biến động" chỉ cho Vinamilk.
   *Chỉ số tài chính:* một doanh nghiệp thì hiện thẻ chỉ số (Vinamilk 15 chỉ số) kèm công thức, đường xu hướng và nguồn; nhiều doanh nghiệp thì hiện bảng chỉ số × doanh nghiệp, ghi phạm vi từng số (riêng/hợp nhất).
@@ -111,6 +117,8 @@ set GEMINI_API_KEY=khoa-cua-ban
 python -m uvicorn api.index:app --port 8000
 ```
 
+Độ tin cậy khi gọi Gemini: gặp 503 và còn mô hình dự phòng thì đổi ngay (không chờ thử lại); khi còn mô hình khác, mỗi lần thử chờ tối đa `GEMINI_QUICK_TIMEOUT_MS` (mặc định 10000), mô hình cuối chờ `GEMINI_TIMEOUT_MS` (20000); mô hình vừa lỗi nghỉ 90-180 giây.
+Đo thực tế khi hai mô hình chính treo: 40,9 giây giảm còn 20,7 giây ở lần đầu, 3 giây ở các lần sau.
 Không có khóa thì mục Trò chuyện báo "chưa sẵn sàng", các mục Tra cứu số liệu và Phân tích vẫn dùng được. Giới hạn mỗi phút theo IP: `RATE_LIMIT_PER_MINUTE` (hỏi đáp, mặc định 6), `BROWSE_LIMIT_PER_MINUTE` (tra cứu, thuyết minh, biểu đồ; mặc định 30), `FEEDBACK_LIMIT_PER_MINUTE` (mặc định 20).
 
 ## Kiểm thử
@@ -119,8 +127,13 @@ Không có khóa thì mục Trò chuyện báo "chưa sẵn sàng", các mục T
 python tests/test_tools.py
 python tests/test_agent.py
 python tests/test_api.py           # cần pip install httpx
+python tests/test_consumer.py      # 12 công ty: tra cứu, so sánh, trả lời trong chat
+python tests/test_insight.py       # tỷ số, tăng trưởng, cầu nối lợi nhuận, đánh giá (có phép tính đối chiếu độc lập từ DuckDB)
+python tests/test_company_eval.py  # bộ đánh giá nhánh công ty và bộ chấm
 python eval/retrieval_check.py
 ```
+
+GitHub Actions (`.github/workflows/tests.yml`) chạy toàn bộ `tests/test_*.py` và hai tập đánh giá công ty ở mỗi lần đẩy; chưa chạy thử trên GitHub từ máy phát triển, lệnh giống hệt lệnh đã chạy cục bộ.
 
 Các test không gọi mạng (Gemini được thay bằng client giả). `python tests/test_e2e_scoring.py` kiểm tra bộ chấm điểm đầu-cuối và bộ câu vàng.
 
@@ -137,6 +150,19 @@ Hiểu đúng giới hạn: đây là kiểm tra **nhất quán nội bộ**, kh
 bằng chứng mạnh là 1.542 ô OCR thuần đều thỏa mọi ràng buộc, vì một chữ số sai gần như chắc chắn làm vỡ đẳng thức. Lỗi không bị bắt: sai ở ô nằm ngoài ràng buộc (19 ô,
 xuất ra `eval/reports/ocr_sample.csv` để đối chiếu tay), hoặc hai lỗi bù trừ nhau. Đã đối chiếu tay với PDF 18 trong 19 ô chưa được phủ (ô còn lại trùng giá trị với một ô đã kiểm): **0 ô sai**. Với 18 ô, 0 sai chỉ cho biết tỷ lệ sai tối đa khoảng 15% (CI95), nên đây là xác nhận nhỏ,
 không phải ước lượng tỷ lệ sai OCR chung; ước lượng đó vẫn cần người đối chiếu một mẫu ngẫu nhiên các ô OCR đã được phủ (xuất bằng `--sample` sau khi bỏ lọc ô chưa phủ).
+
+### Đánh giá nhánh công ty (offline, không cần Gemini)
+
+```
+python eval/build_company_golden.py                                     # dựng lại hai tập từ DuckDB
+python eval/company_eval.py --golden eval/golden_companies.jsonl        # tập dev (71 câu): để tìm lỗi
+python eval/company_eval.py --golden eval/validation_companies.jsonl    # tập kiểm chứng (69 câu): chỉ chấm
+```
+
+Đáp án được tính độc lập từ các bảng DuckDB (không dùng logic của ứng dụng); mỗi tập có 12 nhóm: tra số, tỷ số, xếp hạng, tăng trưởng, vì sao, đánh giá, so sánh, xu hướng, thiếu số, ngoài phạm vi, danh mục, Vinamilk.
+Câu đạt khi có đủ số kỳ vọng, có nguồn, không hỏi lại nhầm, không lẫn chữ OCR thô, từ chối đúng câu ngoài phạm vi. Hai tập không chung dữ kiện (kiểm tra ở `tests/test_company_eval.py`).
+**Kết quả (2026-11-22):** tập dev lượt đầu 62/71 (87%); sau khi sửa các lỗi tìm thấy (nhận diện tỷ số gõ theo tên hiển thị, lời rào đón của "vì sao", từ chối câu dự báo) 71/71 (số đã tinh chỉnh trên chính tập này).
+Tập kiểm chứng chấm một lần, không sửa mã theo nó: **69/69 (100%, CI95 95-100%)**, p95 dưới 0,5 giây. Lưu ý: chấm theo chuỗi kỳ vọng nên đo độ đúng của số và hành vi, không đo độ hay của lời văn; và bộ chỉ có 69 câu nên khoảng tin cậy còn rộng.
 
 ### Đánh giá đầu-cuối với Gemini thật
 

@@ -38,6 +38,11 @@ RATIO_WORDS = ("bien loi nhuan", "bien lai", "bien gop", "bien rong", "ty suat l
 VNM_WORDS = ("vinamilk", "vnm")
 
 
+def asks_ratio(query):
+    """Câu hỏi về tỷ số (biên lợi nhuận, nợ/vốn chủ...), kể cả khi gõ theo tên hiển thị "Nợ phải trả / vốn chủ sở hữu"."""
+    return matches(query, RATIO_WORDS) or bool(insight.asked_ratios(query))
+
+
 def asks_all(query):
     """Câu hỏi nói về cả danh mục ("tất cả các công ty", "công ty nào cao nhất"), không tính "các công ty con" của một doanh nghiệp."""
     return matches(query, ALL_WORDS) and not matches(query, ("cong ty con", "cong ty lien ket", "cong ty me"))
@@ -77,7 +82,7 @@ def question_companies(question):
 
 
 OFF_TOPIC_WORDS = ("gia co phieu", "thi gia", "gia muc tieu", "von hoa", "nen mua", "nen ban", "co nen dau tu", "nen dau tu",
-                   "tu van dau tu", "khuyen nghi", "chung khoan hom nay", "co phieu nao")
+                   "tu van dau tu", "khuyen nghi", "chung khoan hom nay", "co phieu nao", "co phieu", "du bao", "du doan", "trien vong")
 REPORT_WORDS = ("lai", "lo", "loi nhuan", "doanh thu", "tai chinh", "bao cao", "bctc", "tai san", "von", "no", "dong tien",
                 "hang ton kho", "chi phi", "tom tat", "tinh hinh", "ket qua kinh doanh")
 
@@ -534,10 +539,11 @@ def _series_charts(codes, metrics, basis, off_scope=()):
     return blocks
 
 
-def ratio_answer(companies, period, basis="quy"):
-    """Biên lợi nhuận và mức nợ của từng doanh nghiệp, tính từ số đã đối chiếu; ghi rõ số dùng để tính."""
-    lines = [f"**Chỉ số tài chính · {PERIODS[period]}**", "",
-             "| Doanh nghiệp | Biên lợi nhuận gộp | Biên lợi nhuận ròng | Nợ phải trả / vốn chủ sở hữu |", "|---|---:|---:|---:|"]
+def ratio_answer(companies, period, basis="quy", asked=()):
+    """Các tỷ số (biên lợi nhuận, mức nợ) của từng doanh nghiệp, tính từ số đã đối chiếu; tỷ số được hỏi in đậm, ghi rõ số dùng để tính."""
+    keys = list(insight.RATIOS)
+    names = [insight.RATIOS[k]["name"] for k in keys]
+    lines = [f"**Chỉ số tài chính · {PERIODS[period]}**", "", "| Doanh nghiệp | " + " | ".join(names) + " |", "|---|" + "---:|" * len(keys)]
     used, sources, missing = [], {}, []
     for code in companies:
         values, srcs, _ = company_values(code, period, COMPARE_METRICS, basis)
@@ -547,15 +553,16 @@ def ratio_answer(companies, period, basis="quy"):
             for s in report_sources(code, period)[:1]:
                 sources[(s["doc"], s["page"])] = s
             continue
-        lines.append(f"| {COMPANIES[code][0]} ({code}) | " + " | ".join(_pct(r[k]) if k in r else "—" for k in ("bien_gop", "bien_rong", "no_von")) + " |")
+        cells = [(f"**{_pct(r[k])}**" if k in asked else _pct(r[k])) if k in r else "—" for k in keys]
+        lines.append(f"| {COMPANIES[code][0]} ({code}) | " + " | ".join(cells) + " |")
         used.append(f"- **{COMPANIES[code][0]}** (tỷ đồng): " + "; ".join(
-            f"{METRICS[m][0].lower()} {fmt_ty(values[m])}" for m in ("doanh_thu_thuan", "loi_nhuan_gop", "loi_nhuan_sau_thue", "no_phai_tra", "von_chu_so_huu") if m in values) + ".")
+            f"{METRICS[m][0].lower()} {fmt_ty(values[m])}" for m in ("doanh_thu_thuan", "loi_nhuan_gop", "loi_nhuan_truoc_thue", "loi_nhuan_sau_thue", "no_phai_tra", "von_chu_so_huu", "tong_tai_san") if m in values) + ".")
         for s in srcs:
             sources[(s["doc"], s["page"])] = s
     if not used:
         return result(f"Chưa đủ số đã đối chiếu của {', '.join(missing)} cho {PERIODS[period]} để tính biên lợi nhuận hay mức nợ. Mở báo cáo gốc ở phần Nguồn để xem.",
                       list(sources.values()))
-    notes = ["Biên lợi nhuận gộp = lợi nhuận gộp / doanh thu thuần; biên lợi nhuận ròng = lợi nhuận sau thuế / doanh thu thuần."]
+    notes = ["Biên lợi nhuận = lợi nhuận (gộp, trước thuế hoặc sau thuế) / doanh thu thuần; mức nợ = nợ phải trả / vốn chủ sở hữu hoặc / tổng tài sản."]
     if missing:
         notes.append(f"Chưa đủ số đã đối chiếu để tính cho {PERIODS[period]}: {', '.join(missing)}.")
     return result("\n".join([*lines, "", "**Số dùng để tính**", "", *used]), list(sources.values()), notes)
@@ -917,7 +924,7 @@ def answer_for_period(query, companies, period):
         answer = "\n\n".join(f"**{item['source']['doc']} · trang {item['source']['page']}**\n\n{item['text']}" for item in excerpts)
         return result(answer, [item["source"] for item in excerpts], ["Trích đoạn OCR. Đối chiếu báo cáo gốc nếu cần dùng số liệu."])
     metrics = question_metrics(query)
-    if not metrics and not matches(query, RATIO_WORDS):
+    if not metrics and not asks_ratio(query):
         reply = summary(companies, period)
         if len(companies) == 1 and "| Chỉ tiêu |" in reply["answer"]:               # tóm tắt một công ty: thêm nhận định so với kỳ trước và nhóm doanh nghiệp
             texts, sources, notes = assessment_for(companies, period, "general", "quy")
@@ -926,8 +933,8 @@ def answer_for_period(query, companies, period):
             reply["notes"] = list(dict.fromkeys([*reply["notes"], *notes]))
         return reply
     basis = "luy_ke" if matches(query, ("luy ke", "6 thang", "9 thang")) else "quy"
-    if matches(query, RATIO_WORDS):
-        return ratio_answer(companies, period, basis)
+    if asks_ratio(query):
+        return ratio_answer(companies, period, basis, insight.asked_ratios(query))
     if matches(query, ("ty le", "cong ty me", "co dong thieu so", "co dong khong kiem soat", "du bao", "du doan")):
         return result("Với các doanh nghiệp ngoài Vinamilk, mình tra được số của từng chỉ tiêu, biên lợi nhuận, mức nợ, tăng trưởng giữa hai kỳ, "
                       "phân rã vì sao lợi nhuận đổi, số qua các quý và so sánh giữa các doanh nghiệp. Lợi nhuận của cổ đông công ty mẹ hay cổ đông không kiểm soát "

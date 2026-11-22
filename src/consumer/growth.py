@@ -159,4 +159,5 @@ def bridge_text(name: str, base_label: str, cur_label: str, base: dict, cur: dic
         table.append(f"| {part} | {signed_ty(value)} | {'làm tăng' if value > 0 else 'làm giảm' if value < 0 else 'không đổi'} |")
     table.append(f"| **Tổng thay đổi {label.lower()}** | **{signed_ty(total)}** | {direction} |")
     note = f"\n\nChỉ phân rã được đến {label.lower()} vì thiếu số ở các khoản mục phía sau." if level != target else ""
-    return "\n\n".join(["\n".join(lines), "\n".join(table)]) + note, level
+    limit = "\n\n*Đây là phân rã số học từ báo cáo kết quả kinh doanh; dữ liệu không cho biết nguyên nhân kinh doanh (giá nguyên liệu, khuyến mãi, sản lượng...).*"
+    return "\n\n".join(["\n".join(lines), "\n".join(table)]) + note + limit, level

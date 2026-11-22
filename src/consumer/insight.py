@@ -22,9 +22,11 @@ RATIOS = {
                             "ty suat loi nhuan rong")},
     "no_von": {"name": "Nợ phải trả / vốn chủ sở hữu", "num": "no_phai_tra", "den": "von_chu_so_huu", "better": "low",
                "words": ("no tren von chu so huu", "no tren von chu", "no tren von", "he so no tren von", "ty le no tren von",
+                         "no phai tra / von chu so huu", "no phai tra/von chu so huu", "no / von chu so huu", "no/von chu so huu",
                          "no/von", "don bay", "ty le no", "he so no", "d/e")},
     "no_ts": {"name": "Nợ phải trả / tổng tài sản", "num": "no_phai_tra", "den": "tong_tai_san", "better": "low",
-              "words": ("no tren tong tai san", "ty le no tren tai san", "no phai tra tren tong tai san", "no/tong tai san")},
+              "words": ("no tren tong tai san", "ty le no tren tai san", "no phai tra tren tong tai san", "no/tong tai san",
+                        "no phai tra / tong tai san", "no phai tra/tong tai san", "no / tong tai san")},
 }
 GENERIC_MARGIN = ("bien loi nhuan", "bien lai", "ty suat loi nhuan", "bien ln")      # không nói gộp hay ròng: hiện cả hai
 
