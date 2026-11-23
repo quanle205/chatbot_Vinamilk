@@ -102,8 +102,6 @@ def ask(body: AskBody, request: Request):
         target = service.role_target(body.question)
         if not companies and target and not service.matches(service.fold(body.question), service.VNM_WORDS):
             return service.unknown_company_answer(target)
-        if companies:
-            return service.role_answer(companies)
     companies = companies or ([body.company] if body.company else [])
     context = None
     if not companies:

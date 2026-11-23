@@ -205,30 +205,6 @@ def unknown_company_answer(name):
                   "Bạn có thể hỏi về một trong các công ty này, ví dụ \"chủ tịch Vinamilk là ai\".")
 
 
-def role_answer(companies):
-    """Chức danh lãnh đạo của công ty ngoài Vinamilk: OCR các báo cáo này lỗi dấu nặng nên không in lại tên; chỉ chỉ ra trang PDF có tên."""
-    blocks, sources = [], []
-    for code in companies:
-        name = COMPANIES[code][0]
-        found = None
-        for period in reversed(list(PERIODS)):
-            rows, _ = repository._document_index(code, period)
-            for _id, page, content, url, section in rows:
-                text = fold(content)
-                if "chu tich" in text and ("hdqt" in text or "hoi dong quan tri" in text) and "ong" in text:
-                    found = (period, page, repository.source(code, period, "PDF", page, url, section))
-                    break
-            if found:
-                break
-        if found:
-            blocks.append(f"**{name} ({code}):** tên Chủ tịch HĐQT và Tổng Giám đốc nằm ở phần \"Thông tin chung\", trang {found[1]} của báo cáo {PERIODS[found[0]]}. "
-                          "Văn bản OCR của báo cáo này bị lỗi chữ nên mình không in lại tên để tránh sai; bạn mở Nguồn để xem đúng trang PDF.")
-            sources.append(found[2])
-        else:
-            blocks.append(f"**{name} ({code}):** mình chưa tìm thấy trang nêu Chủ tịch HĐQT trong báo cáo đã có.")
-    return result("\n\n".join(blocks), sources)
-
-
 def question_metrics(query):
     return {metric for metric, (label, aliases) in METRICS.items()
             if matches(query, (fold(label), *aliases))}
