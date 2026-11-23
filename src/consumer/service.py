@@ -179,6 +179,56 @@ def catalog_answer():
     return result("\n".join(lines), [], notes)
 
 
+ROLE_WORDS = ("chu tich", "tong giam doc", "giam doc dieu hanh", "ceo", "hoi dong quan tri", "hdqt", "ban giam doc", "ban lanh dao",
+              "ke toan truong", "nguoi dai dien phap luat")
+ROLE_FILLER = {"la", "ai", "cua", "hien", "tai", "hien tai", "ten", "gi", "the", "nao", "o", "ong", "ba", "cong", "ty", "tap", "doan",
+               "thi", "va", "bao", "nhieu", "tuoi", "hay", "cho", "biet", "toi", "minh", "hoi", "dong", "quan", "tri", "ban", "giam", "doc",
+               "cac", "nhung", "thanh", "vien", "cong ty", "co", "khong", "duoc", "dang", "giu", "chuc", "vu", "danh", "sach"}
+
+
+def role_question(question):
+    return matches(fold(question), ROLE_WORDS)
+
+
+def role_target(question):
+    """Phần tên đứng sau chức danh trong câu hỏi ("chủ tịch kfc là ai" -> "kfc"); rỗng nếu câu không nêu tên công ty."""
+    query = fold(question)
+    for role in sorted(ROLE_WORDS, key=len, reverse=True):
+        query = re.sub(rf"(?<!\w){role}(?!\w)", " ", query)
+    return [w for w in re.findall(r"\w+", query) if w not in ROLE_FILLER]
+
+
+def unknown_company_answer(name):
+    label = " ".join(name).upper()
+    return result(f"Mình không có dữ liệu về **{label}**: bộ dữ liệu chỉ gồm báo cáo tài chính của 12 công ty "
+                  "(Vinamilk, Mộc Châu Milk, Đường Quảng Ngãi, Bibica, Habeco, Cholimex Food, KIDO, Masan Consumer, PAN, Sabeco, AgriS, Vinacafé Biên Hòa). "
+                  "Bạn có thể hỏi về một trong các công ty này, ví dụ \"chủ tịch Vinamilk là ai\".")
+
+
+def role_answer(companies):
+    """Chức danh lãnh đạo của công ty ngoài Vinamilk: OCR các báo cáo này lỗi dấu nặng nên không in lại tên; chỉ chỉ ra trang PDF có tên."""
+    blocks, sources = [], []
+    for code in companies:
+        name = COMPANIES[code][0]
+        found = None
+        for period in reversed(list(PERIODS)):
+            rows, _ = repository._document_index(code, period)
+            for _id, page, content, url, section in rows:
+                text = fold(content)
+                if "chu tich" in text and ("hdqt" in text or "hoi dong quan tri" in text) and "ong" in text:
+                    found = (period, page, repository.source(code, period, "PDF", page, url, section))
+                    break
+            if found:
+                break
+        if found:
+            blocks.append(f"**{name} ({code}):** tên Chủ tịch HĐQT và Tổng Giám đốc nằm ở phần \"Thông tin chung\", trang {found[1]} của báo cáo {PERIODS[found[0]]}. "
+                          "Văn bản OCR của báo cáo này bị lỗi chữ nên mình không in lại tên để tránh sai; bạn mở Nguồn để xem đúng trang PDF.")
+            sources.append(found[2])
+        else:
+            blocks.append(f"**{name} ({code}):** mình chưa tìm thấy trang nêu Chủ tịch HĐQT trong báo cáo đã có.")
+    return result("\n\n".join(blocks), sources)
+
+
 def question_metrics(query):
     return {metric for metric, (label, aliases) in METRICS.items()
             if matches(query, (fold(label), *aliases))}

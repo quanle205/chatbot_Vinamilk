@@ -97,7 +97,14 @@ def ask(body: AskBody, request: Request):
     ASK_LIMIT.check(request)
     if service.catalog_question(body.question):              # "có bao nhiêu công ty trong dữ liệu": trả danh mục, không cần Gemini
         return service.catalog_answer()
-    companies = service.question_companies(body.question) or ([body.company] if body.company else [])
+    companies = service.question_companies(body.question)
+    if service.role_question(body.question):                 # "chủ tịch ... là ai": không lấy nhầm lãnh đạo Vinamilk cho công ty khác
+        target = service.role_target(body.question)
+        if not companies and target and not service.matches(service.fold(body.question), service.VNM_WORDS):
+            return service.unknown_company_answer(target)
+        if companies:
+            return service.role_answer(companies)
+    companies = companies or ([body.company] if body.company else [])
     context = None
     if not companies:
         context = service.inherited_question(body.question, [t.text for t in body.history[-2 * MAX_HISTORY_TURNS:] if t.role == "user"])
